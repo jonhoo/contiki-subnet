@@ -33,6 +33,13 @@ static const struct packetbuf_attrlist attributes[] = {
 /*---------------------------------------------------------------------------*/
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, const struct subscription *s) {
 }
+static void broadcast(struct adisclose_conn *c) {
+  /* note that we can use disclose here since we don't need any callbacks,
+   * adisclose has no disclose callback on send and adisclose_conn has
+   * disclose_conn as its first member. We use disclose rather than adisclose
+   * since this is a broadcast and we don't want to wait for ACKs */
+  disclose_send(c, &rimeaddr_node_addr);
+}
 /*---------------------------------------------------------------------------*/
 static void on_peer_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno) {
   /* peer points to second adisclose_conn, so we need to decrement to cast to
@@ -58,7 +65,7 @@ static void on_peer_recv(struct adisclose_conn *adisclose, const rimeaddr_t *fro
     }
 
     /* send new subscription to neighbours */
-    adisclose_send(&c->pubsub, &rimeaddr_node_addr);
+    broadcast(&c->pubsub);
 
     if (c->u->subscribe != NULL) {
       c->u->subscribe(c, &s);
@@ -80,7 +87,7 @@ static void on_peer_hear(struct adisclose_conn *adisclose, const rimeaddr_t *fro
     }
 
     /* send new subscription to neighbours */
-    adisclose_send(&c->pubsub, &rimeaddr_node_addr);
+    broadcast(&c->pubsub);
 
     if (c->u->subscribe != NULL) {
       c->u->subscribe(c, &s);
@@ -147,10 +154,29 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     }
 
     /* send new subscription to neighbours */
-    adisclose_send(&c->pubsub, &rimeaddr_node_addr);
+    broadcast(&c->pubsub);
 
-    if (c->u->subscription != NULL) {
-      c->u->subscription(c, &s);
+    if (c->u->subscribe != NULL) {
+      c->u->subscribe(c, &s);
+    }
+
+  } else (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE) {
+
+    PRINTF("%d.%d: subnet: heard UNSUBSCRIBE from %d.%d via %d.%d, subid %d\n",
+       rimeaddr_node_addr.u8[0], rimeaddr_node_addr.u8[1],
+       s->sink->u8[0], s->sink->u8[1],
+       from->u8[0], from->u8[1],
+       s->subid);
+
+    if (c->u->exists == NULL || !c->u->exists(c, &s)) {
+      return;
+    }
+
+    /* send new subscription to neighbours */
+    broadcast(&c->pubsub);
+
+    if (c->u->unsubscribe != NULL) {
+      c->u->unsubscribe(c, &s);
     }
 
   } else (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_PUBLISH) {
@@ -239,15 +265,19 @@ short subnet_subscribe(struct subnet_conn *c) {
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, ++c->subid);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  adisclose_send(&c->pubsub, &rimeaddr_node_addr);
+  broadcast(&c->pubsub);
   return c->subid;
-}
 
-short subnet_replace(struct subnet_conn *c, short subid) {
-  /* TODO */
+  /* TODO: has to be send periodically */
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, short subid) {
-  /* TODO */
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  broadcast(&c->pubsub);
+
+  /* TODO: has to be send periodically and cancel periodic sending of
+   * corresponding subscribe */
 }
 /** @} */

@@ -42,9 +42,10 @@
 #define SUBNET_PACKET_TYPE_ASK 0
 #define SUBNET_PACKET_TYPE_PUBLISH 1
 #define SUBNET_PACKET_TYPE_REPLY 0
+#define SUBNET_PACKET_TYPE_UNSUBSCRIBE 2
 
 #define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_ID, PACKETBUF_ATTR_BIT * SUBNET_SUBSCRIPTION_BITS }, \
-                           { PACKETBUF_ATTR_EPACKET_TYPE, PACKETBUF_ATTR_BIT }, \
+                           { PACKETBUF_ATTR_EPACKET_TYPE, 2 * PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ADDR_ERECEIVER, PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
 /*---------------------------------------------------------------------------*/
@@ -141,14 +142,6 @@ void subnet_publish(struct subnet_conn *c, const struct subscription *s);
  * \return The subscription id of the new subscription
  */
 short subnet_subscribe(struct subnet_conn *c);
-
-/**
- * \brief Send out a new subscription replacing the given subscription
- * \param c Connection state
- * \param subid Subscription to replace
- * \return The subscription id of the new subscription
- */
-short subnet_replace(struct subnet_conn *c, short subid);
 
 /**
  * \brief End the given subscription
