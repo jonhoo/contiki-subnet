@@ -352,11 +352,16 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     );
 
     /* ask peer for clarification */
+    struct queuebuf *q = queuebuf_new_from_packetbuf();
+
     packetbuf_clear();
     packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_ASK);
     packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
     packetbuf_copyfrom(&unknowns, numunknowns * sizeof(short));
     adisclose_send(&c->peer, from);
+
+    queuebuf_to_packetbuf(q);
+    queuebuf_free(q);
   }
 }
 
@@ -368,6 +373,8 @@ static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
   const rimeaddr_t *nexthop = get_next_hop(c, packetbuf_addr(PACKETBUF_ADDR_ERECEIVER), to);
 
   if (nexthop == NULL) {
+    queuebuf_free(c->sentpacket);
+    c->sentpacket = NULL;
 
     if (c->u->errpub != NULL) {
       c->u->errpub(c);
@@ -375,6 +382,7 @@ static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
     return;
   }
 
+  queuebuf_to_packetbuf(c->sentpacket);
   adisclose_send(&c->pubsub, nexthop);
 }
 
@@ -385,6 +393,11 @@ static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
 static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
+
+  if (c->sentpacket != NULL) {
+    queuebuf_free(c->sentpacket);
+    c->sentpacket = NULL;
+  }
 
   if (c->u->onsent == NULL) {
     return;
@@ -427,6 +440,9 @@ void subnet_close(struct subnet_conn *c) {
 }
 
 void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink) {
+  /* preserve existing packetbuf */
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
@@ -434,12 +450,28 @@ void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink) {
   c->fragments = 0;
   c->frag = packetbuf_dataptr();
   packetbuf_set_datalen(0);
+
+  /* store incomplete publish packet */
+  c->sentpacket = queuebuf_new_from_packetbuf();
+
+  /* restore previous packetbuf */
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
 }
 
 bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t bytes) {
+  /* preserve existing packetbuf */
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+  /* restore publish packet */
+  queuebuf_to_packetbuf(c->sentpacket);
+  queuebuf_free(c->sentpacket); /* why doesn't contiki have a queuebuf_update */
+
   uint16_t l = packetbuf_totlen();
   size_t sz = sizeof(struct fragment) + bytes;
   if (l + sz > PACKETBUF_SIZE) {
+    /* restore old packetbuf */
+    queuebuf_to_packetbuf(q);
+    queuebuf_free(q);
     return false;
   }
 
@@ -450,13 +482,28 @@ bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t b
   memcpy(c->frag, payload, bytes);
   SKIPBYTES(c->frag, struct fragment *, bytes);
   packetbuf_set_datalen(packetbuf_datalen() + sz);
+
+  /* store publish packet and restore old packetbuf */
+  c->sentpacket = queuebuf_new_from_packetbuf();
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
+
   return true;
 }
 
 void subnet_publish(struct subnet_conn *c) {
+  /* preserve existing packetbuf */
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+  /* restore publish packet */
+  queuebuf_to_packetbuf(c->sentpacket);
+  queuebuf_free(c->sentpacket);
+
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, c->fragments);
   const rimeaddr_t *nexthop = get_next_hop(c, packetbuf_addr(PACKETBUF_ADDR_ERECEIVER), NULL);
   if (nexthop == NULL || adisclose_is_transmitting(c)) {
+    /* restore old packetbuf */
+    queuebuf_to_packetbuf(q);
+    queuebuf_free(q);
 
     if (c->u->errpub != NULL) {
       c->u->errpub(c);
@@ -467,6 +514,11 @@ void subnet_publish(struct subnet_conn *c) {
   packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
 
   adisclose_send(&c->pubsub, nexthop);
+
+  /* store publish packet and restore old packetbuf */
+  c->sentpacket = queuebuf_new_from_packetbuf();
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
 }
 
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {

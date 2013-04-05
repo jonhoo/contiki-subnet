@@ -93,6 +93,9 @@ struct subnet_conn {
 
   short numneighbors;               /* number of neighbors known */
   struct neighbor neighbors[SUBNET_MAX_NEIGHBORS];
+
+  struct queuebuf *sentpacket;      /* store a publish message until it has been
+                                       sent to the next hop */
 };
 /*---------------------------------------------------------------------------*/
 struct subnet_callbacks {
