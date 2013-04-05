@@ -71,7 +71,7 @@ recv_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
       c->sndnxt = (c->sndnxt + 1) % (1 << ADISCLOSE_PACKET_ID_BITS);
       c->is_tx = 0;
       if(c->u->sent != NULL) {
-        c->u->sent(c, &c->receiver, c->rxmit);
+        c->u->sent(c, &c->receiver);
       }
     } else {
       PRINTF("%d.%d: adisclose: received bad ACK %d for %d\n",
@@ -147,7 +147,7 @@ hear_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
 	    PACKETBUF_ATTR_PACKET_TYPE_DATA) {
 
     if(c->u->hear != NULL) {
-      c->u->hear(c, from);
+      c->u->hear(c, from, packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
     }
   }
 }

@@ -18,13 +18,9 @@
 #ifndef __SUBNET_H__
 #define __SUBNET_H__
 
+#include "net/rime/adisclose.h"
 #include "net/rime/rimeaddr.h"
-
-#ifdef SUBNET_CONF_SUBSCRIPTION_BITS
-#define SUBNET_SUBSCRIPTION_BITS SUBNET_CONF_SUBSCRIPTION_BITS
-#else
-#define SUBNET_SUBSCRIPTION_BITS 4
-#endif
+#include <stdbool.h>
 
 #ifdef SUBNET_CONF_MAX_SINKS
 #define SUBNET_MAX_SINKS SUBNET_CONF_MAX_SINKS
@@ -44,40 +40,14 @@
 #define SUBNET_PACKET_TYPE_REPLY 0
 #define SUBNET_PACKET_TYPE_UNSUBSCRIBE 2
 
-#define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_ID, PACKETBUF_ATTR_BIT * SUBNET_SUBSCRIPTION_BITS }, \
-                           { PACKETBUF_ATTR_EPACKET_TYPE, 2 * PACKETBUF_ATTR_BIT }, \
+#define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_TYPE, 2 * PACKETBUF_ATTR_BIT }, \
+                           { PACKETBUF_ATTR_EFRAGMENTS, 8 * PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ADDR_ERECEIVER, PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
 /*---------------------------------------------------------------------------*/
-/**
- * \brief Subscription identifier
- */
-struct subscription {
-  const rimeaddr_t *sink;
+struct fragment {
   short subid;
-};
-/*---------------------------------------------------------------------------*/
-struct subnet_callbacks {
-  /* called if no next hop can be contacted */
-  void (* errpub)(struct subnet_conn *c);
-
-  /* called when a publish is received */
-  void (* ondata)(struct subnet_conn *c, struct subscription *s);
-
-  /* called when a publish was sent successfully */
-  void (* onsent)(struct subnet_conn *c, struct subscription *s);
-
-  /* called when a new subscription is in packetbuf */
-  void (* subscribe)(struct subnet_conn *c, struct subscription *s);
-
-  /* called when a subscription is cancelled */
-  void (* unsubscribe)(struct subnet_conn *c, struct subscription *s);
-
-  /* should return true if the given subscription is known */
-  bool (* exists)(struct subnet_conn *c, struct subscription *s);
-
-  /* should fill packetbuf with information about the given subscription */
-  void (* inform)(struct subnet_conn *c, struct subscription *s);
+  size_t length;
 };
 /*---------------------------------------------------------------------------*/
 /**
@@ -95,7 +65,7 @@ struct sink_route_hop {
 struct sink_route {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
-  struct sink_route_hop[SUBNET_MAX_ALTERNATE_ROUTES];
+  struct sink_route_hop nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 };
 
 /**
@@ -107,8 +77,38 @@ struct subnet_conn {
   const struct subnet_callbacks *u; /* callbacks */
   short subid;                      /* last sent subscription id */
 
+  short fragments;                  /* number of fragments added */
+  struct fragment *frag;            /* next fragment pointer */
+
   short numroutes;                  /* number of routes (i.e. sinks) known */
   struct sink_route routes[SUBNET_MAX_SINKS];
+};
+/*---------------------------------------------------------------------------*/
+struct subnet_callbacks {
+  /* called if no next hop can be contacted */
+  void (* errpub)(struct subnet_conn *c);
+
+  /* called when a publish is received. Note that data MUST be copied if it is
+   * to be reused later as the memory WILL be reclaimed */
+  void (* ondata)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
+
+  /* called when a publish was sent successfully */
+  void (* onsent)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+
+  /* called when a new subscription is in packetbuf. Note that data MUST be
+   * copied if it is to be reused later as the memory WILL be reclaimed */
+  void (* subscribe)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
+
+  /* called when a subscription is cancelled */
+  void (* unsubscribe)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+
+  /* should return true if the given subscription is known */
+  bool (* exists)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+
+  /* should fill target with information about the given subscription and return
+   * the number of bytes written. It is up to this function to make sure the
+   * packet is not overfilled (by checking packetbuf_totlen()) */
+  size_t (* inform)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *target);
 };
 /*---------------------------------------------------------------------------*/
 /**
@@ -130,18 +130,34 @@ void subnet_open(struct subnet_conn *c,
 void subnet_close(struct subnet_conn *c);
 
 /**
- * \brief Publish the data in packetbuf for the given subscription
+ * \brief Prepare packetbuf for a publish towards the given sink
  * \param c Connection state
- * \param s Subscription identifier
+ * \param sink Sink to send data to
  */
-void subnet_publish(struct subnet_conn *c, const struct subscription *s);
+void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink);
+
+/**
+ * \brief Add data for a subscription to the current publish
+ * \param c Connection state
+ * \param subid Subscription data is being added for
+ * \param payload Data
+ * \param bytes Number of bytes of data being added
+ * \return True if data was added, false if no more data can be added
+ */
+bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t bytes);
+
+/**
+ * \brief Send publishe data packet
+ * \param c Connection state
+ */
+void subnet_publish(struct subnet_conn *c);
 
 /**
  * \brief Send out a new subscription
  * \param c Connection state
  * \return The subscription id of the new subscription
  */
-short subnet_subscribe(struct subnet_conn *c);
+short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
 
 /**
  * \brief End the given subscription

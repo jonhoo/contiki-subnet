@@ -34,6 +34,7 @@
 #ifndef __ADISCLOE_H__
 #define __ADISCLOSE_H__
 
+#include "sys/ctimer.h"
 #include "net/rime/disclose.h"
 
 #define ADISCLOSE_PACKET_ID_BITS 2
@@ -41,13 +42,6 @@
 #define ADISCLOSE_ATTRIBUTES  { PACKETBUF_ATTR_PACKET_TYPE, PACKETBUF_ATTR_BIT }, \
                               { PACKETBUF_ATTR_PACKET_ID, PACKETBUF_ATTR_BIT * ADISCLOSE_PACKET_ID_BITS }, \
                              DISCLOSE_ATTRIBUTES
-struct adisclose_callbacks {
-  void (* recv)(struct adisclose_conn *c, const rimeaddr_t *from, uint8_t seqno);
-  void (* sent)(struct adisclose_conn *c, const rimeaddr_t *to);
-  void (* timedout)(struct adisclose_conn *c, const rimeaddr_t *to);
-  void (* hear)(struct adisclose_conn *c, const rimeaddr_t *from, uint8_t seqno);
-};
-
 struct adisclose_conn {
   struct disclose_conn c;
   const struct adisclose_callbacks *u;
@@ -56,6 +50,13 @@ struct adisclose_conn {
   uint8_t is_tx;
   uint8_t failed;
   rimeaddr_t receiver;
+};
+
+struct adisclose_callbacks {
+  void (* recv)(struct adisclose_conn *c, const rimeaddr_t *from, uint8_t seqno);
+  void (* sent)(struct adisclose_conn *c, const rimeaddr_t *to);
+  void (* timedout)(struct adisclose_conn *c, const rimeaddr_t *to);
+  void (* hear)(struct adisclose_conn *c, const rimeaddr_t *from, uint8_t seqno);
 };
 
 void adisclose_open(struct adisclose_conn *c, uint16_t channel,
