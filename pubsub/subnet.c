@@ -120,8 +120,6 @@ short next_fragment(struct fragment **raw, void **payload) {
   *raw = *raw + 1;
   /* we're now at the payload */
   *payload = *raw;
-  /* get char* so we can skip by size_t */
-  char *data = (char *) *raw;
   /* move past (length of payload) bytes */
   SKIPBYTES(*raw, struct fragment *, length);
   return subid;
@@ -285,6 +283,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
         frag->length = c->u->inform(c, sink, subids[i], frag+1);
 
         if (frag->length == 0) {
+          /* don't put an empty fragment in there */
           packetbuf_set_datalen(packetbuf_datalen() - sizeof(struct fragment));
           continue;
         }
@@ -482,7 +481,7 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
   f->length = bytes;
   f++;
   memcpy(f, payload, bytes);
-  packetbuf_set_datalen(bytes + sizeof(struct fragment));
+  packetbuf_set_datalen(sizeof(struct fragment) + bytes);
 
   broadcast(&c->pubsub);
   return c->subid;
