@@ -28,6 +28,12 @@
 #define SUBNET_MAX_SINKS 10
 #endif
 
+#ifdef SUBNET_CONF_MAX_NEIGHBORS
+#define SUBNET_MAX_NEIGHBORS SUBNET_CONF_MAX_NEIGHBORS
+#else
+#define SUBNET_MAX_NEIGHBORS 10
+#endif
+
 #ifdef SUBNET_CONF_MAX_ALTERNATE_ROUTES
 #define SUBNET_MAX_ALTERNATE_ROUTES SUBNET_CONF_MAX_ALTERNATE_ROUTES
 #else
@@ -40,9 +46,10 @@
 #define SUBNET_PACKET_TYPE_REPLY 0
 #define SUBNET_PACKET_TYPE_UNSUBSCRIBE 2
 
-#define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_TYPE, 2 * PACKETBUF_ATTR_BIT }, \
-                           { PACKETBUF_ATTR_EFRAGMENTS, 8 * PACKETBUF_ATTR_BIT }, \
-                           { PACKETBUF_ADDR_ERECEIVER, PACKETBUF_ADDRSIZE }, \
+#define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_TYPE, 2*PACKETBUF_ATTR_BIT }, \
+                           { PACKETBUF_ATTR_EFRAGMENTS,   8*PACKETBUF_ATTR_BIT }, \
+                           { PACKETBUF_ATTR_HOPS,         4*PACKETBUF_ATTR_BIT }, \
+                           { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
 /*---------------------------------------------------------------------------*/
 struct fragment {
@@ -53,10 +60,10 @@ struct fragment {
 /**
  * \brief Information about a single next hop
  */
-struct sink_route_hop {
-  rimeaddr_t nexthop;
+struct neighbor {
+  rimeaddr_t addr;
   short cost; /* advertised cost for this hop by next hop */
-  uint8_t last_active; /* last time this next hop was heard from */
+  unsigned long last_active; /* last time this next hop was heard from */
 };
 
 /**
@@ -65,7 +72,8 @@ struct sink_route_hop {
 struct sink_route {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
-  struct sink_route_hop nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
+  short numhops;
+  struct neighbor *nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 };
 
 /**
@@ -82,6 +90,9 @@ struct subnet_conn {
 
   short numroutes;                  /* number of routes (i.e. sinks) known */
   struct sink_route routes[SUBNET_MAX_SINKS];
+
+  short numneighbors;               /* number of neighbors known */
+  struct neighbor neighbors[SUBNET_MAX_NEIGHBORS];
 };
 /*---------------------------------------------------------------------------*/
 struct subnet_callbacks {

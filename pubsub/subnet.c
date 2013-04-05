@@ -47,11 +47,55 @@ static const struct packetbuf_attrlist attributes[] = {
   /* note the cast to char* to be able to move in bytes */ \
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
-/* TODO: update last active for "from" for all recv/hear callbacks */
-/*---------------------------------------------------------------------------*/
-static const rimeaddr_t* get_next_hop(struct subnet_conn *c, const rimeaddr_t *sink) {
-  return sink;
+static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
+  for (i = 0; i < c->numroutes; i++) {
+    if (rimeaddr_cmp(&c->routes[i].sink, sink)) {
+      return c->routes[i].advertised_cost;
+    }
+  }
+
+  return 0;
 }
+static const rimeaddr_t* get_next_hop(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *prevto) {
+  int i;
+  struct neighbor *n = NULL;
+  struct sink_route *route = NULL;
+  struct neighbor *next;
+
+  /* find neighbor pointer */
+  if (prevto != NULL) {
+    for (i = 0; i < c->numneighbors; i++) {
+      if (rimeaddr_cmp(&c->neighbors[i].addr, prevto)) {
+        n = &c->neighbors[i];
+      }
+    }
+  }
+
+  /* find sink route */
+  for (i = 0; i < c->numroutes; i++) {
+    if (rimeaddr_cmp(&c->routes[i].sink, sink)) {
+      route = &c->routes[i]
+    }
+  }
+
+  /* find next most expensive route after n */
+  next = n;
+  for (i = 0; i < route.numhops; i++) {
+    if (next == NULL || route.nexthops[i]->cost > next.cost) {
+      /* TODO: Deal with multiple next hops with the same cost */
+      /* TODO: Handle link quality? */
+      next = route.nexthops[i];
+    }
+  }
+
+  if (next == n || next == NULL) {
+    /* no next route found */
+    return NULL;
+  }
+
+  return n->addr;
+}
+
 static void broadcast(struct adisclose_conn *c) {
   /* note that we can use disclose here since we don't need any callbacks,
    * adisclose has no disclose callback on send and adisclose_conn has
@@ -83,12 +127,104 @@ short next_fragment(struct fragment **raw, void **payload) {
   return subid;
 }
 /*---------------------------------------------------------------------------*/
-void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink) {
+void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *from) {
+  int i;
+  struct neighbor *n = NULL;
+  struct sink_route *route = NULL;
+  struct neighbor *cheap;
+  struct neighbor *oldest;
+  int oldesti;
+
+  /* find neighbor pointer */
+  oldest = n;
+  for (i = 0; i < c->numneighbors; i++) {
+    if (rimeaddr_cmp(&c->neighbors[i].addr, from)) {
+      n = &c->neighbors[i];
+      break;
+    }
+
+    if (oldest == NULL || c->neighbors[i].last_active < oldest->last_active) {
+      oldest = &c->neighbors[i];
+    }
+  }
+
+  /* create neighbor if not found */
+  if (n == NULL) {
+    if (c->numneighbors >= SUBNET_MAX_NEIGHBORS) {
+      PRINTF("%d.%d: subnet: max neighbours limit hit\n",
+          rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
+      n = oldest;
+    } else {
+      n = &c->neighbors[c->numneighbors];
+      c->numneighbors++;
+    }
+
+    rimeaddr_copy(&n->addr, from);
+    n->last_active = clock_seconds();
+    n->cost = packetbuf_attr(PACKETBUF_ATTR_HOPS);
+  }
+
+  /* find route to sink */
+  for (i = 0; i < c->numroutes; i++) {
+    if (rimeaddr_cmp(&c->routes[i].sink, sink)) {
+      route = &c->routes[i]
+    }
+  }
+
+  /* create sink node if not found */
+  if (route == NULL) {
+    if (c->numroutes >= SUBNET_MAX_SINKS) {
+      PRINTF("%d.%d: subnet: max sinks limit hit\n",
+          rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
+      return;
+    } else {
+      route = &c->routes[c->numroutes];
+      rimeaddr_copy(&route->sink, sink);
+      route->advertised_cost = n->cost + 1;
+      route->numhops = 0;
+      c->numroutes++;
+    }
+  }
+
+  /* find cheapest and oldest next hop towards sink */
+  cheap = n;
+  oldest = n;
+  for (i = 0; i < route->numhops; i++) {
+    if (rimeaddr_cmp(&route->nexthops[i]->addr, from)) {
+      n = NULL;
+    }
+
+    if (route->nexthops[i]->cost < cheapest->cost) {
+      cheapest = &route->nexthops[i];
+    }
+
+    if (route->nexthops[i]->last_active < oldest->last_active) {
+      oldest = &route->nexthops[i];
+      oldesti = i;
+    }
+  }
+
+  /* if *from was not stored as a next hop for sink and it is indeed a *next*
+   * hop, add it (or replace with oldest) */
+  if (n != NULL && n->cost <= route->advertised_cost) {
+    if (route->numhops < SUBNET_MAX_ALTERNATE_ROUTES) {
+      route->nexthops[route->numhops] = n;
+      route->numhops++;
+    /* } else if (oldest != n) { no need for this check since n is always new */
+    } else {
+      route->nexthops[oldesti] = n;
+    }
+  }
+}
+
+void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   bool unsubscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE);
 
   if (c->u->exists == NULL) {
     return;
   }
+
+  update_routes(c, sink, from);
 
   EACH_FRAGMENT(
     if (!!c->u->exists(c, sink, subid) == unsubscribe) {
@@ -129,6 +265,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     }
 
     packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_REPLY);
+    packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
     {
       short fragments = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS);
       struct fragment *frag = packetbuf_dataptr();
@@ -163,7 +300,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     adisclose_send(&c->peer, from);
 
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
-    handle_subscriptions(c, sink);
+    handle_subscriptions(c, sink, from);
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -196,9 +333,9 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE) {
-    handle_subscriptions(c, sink);
+    handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE) {
-    handle_subscriptions(c, sink);
+    handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_PUBLISH) {
 
     if (c->u->exists == NULL) {
@@ -229,7 +366,17 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
  * or call errpub callback if no more alternates are available
  */
 static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
-  /* TODO */
+  const rimeaddr_t *nexthop = get_next_hop(c, packetbuf_addr(PACKETBUF_ADDR_ERECEIVER), to);
+
+  if (nexthop == NULL) {
+
+    if (c->u->errpub != NULL) {
+      c->u->errpub(c);
+    }
+    return;
+  }
+
+  adisclose_send(&c->pubsub, nexthop);
 }
 
 /**
@@ -309,14 +456,26 @@ bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t b
 
 void subnet_publish(struct subnet_conn *c) {
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, c->fragments);
-  const rimeaddr_t *nexthop = get_next_hop(c, packetbuf_addr(PACKETBUF_ADDR_ERECEIVER));
+  const rimeaddr_t *nexthop = get_next_hop(c, packetbuf_addr(PACKETBUF_ADDR_ERECEIVER), NULL);
+  if (nexthop == NULL || adisclose_is_transmitting(c)) {
+
+    if (c->u->errpub != NULL) {
+      c->u->errpub(c);
+    }
+    return;
+    /* TODO: let upstream know whether we failed because no next hop or busy */
+  }
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
+
   adisclose_send(&c->pubsub, nexthop);
 }
 
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
+  packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, 1);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
 
   struct fragment *f = packetbuf_dataptr();
   f->subid = ++c->subid;
@@ -330,9 +489,11 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, short subid) {
+  packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
 
   struct fragment *f = packetbuf_dataptr();
   f->subid = subid;
