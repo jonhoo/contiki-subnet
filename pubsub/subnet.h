@@ -70,11 +70,15 @@ static struct neighbor {
 /**
  * \brief Information about next hops to a single sink
  */
-static struct sink_route {
+static struct sink {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
   short numhops;
   struct neighbor *nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
+
+  short fragments;
+  int buflen;
+  char buf[PACKETBUF_SIZE];
 };
 /*---------------------------------------------------------------------------*/
 /**
@@ -86,17 +90,11 @@ struct subnet_conn {
   const struct subnet_callbacks *u; /* callbacks */
   short subid;                      /* last sent subscription id */
 
-  short fragments;                  /* number of fragments added */
-  struct fragment *frag;            /* next fragment pointer */
-
-  short numroutes;                  /* number of routes (i.e. sinks) known */
-  struct sink_route routes[SUBNET_MAX_SINKS];
+  short numsinks;                   /* number of routes (i.e. sinks) known */
+  struct sink sinks[SUBNET_MAX_SINKS];
 
   short numneighbors;               /* number of neighbors known */
   struct neighbor neighbors[SUBNET_MAX_NEIGHBORS];
-
-  struct queuebuf *sentpacket;      /* store a publish message until it has been
-                                       sent to the next hop */
 };
 
 struct subnet_callbacks {
