@@ -1,58 +1,67 @@
-#include "net/rime/subnet.h"
+/**
+ * \addtogroup pubsub
+ * @{
+ *
+ * Publisher nodes are nodes that produce readings.
+ */
+
+/**
+ * \file   Header file for a publisher node
+ * \author Jon Gjengset <jon@tsp.io>
+ */
+
+#ifndef __PUBSUB_PUB_H__
+#define __PUBSUB_PUB_H__
 #include "lib/pubsub/common.h"
 
-struct publisher {
-  struct subnet_conn c;
-  struct process *caller;
-};
-
-void publisher_start(*ps, *on_subscription);
-void publisher_always_has(*ps, reading_type, *reading, reading_size);
-void publisher_has(*ps, reading_type, reading_size);
-void publisher_in_need(*ps);
-void publisher_needs(*ps, reading_type);
-void publisher_publish(*ps, reading_type, *reading);
+#ifdef PUBSUB_CONF_MAX_SENSORS
+#define PUBSUB_MAX_SENSORS PUBSUB_CONF_MAX_SENSORS
+#else
+#define PUBSUB_MAX_SENSORS 5
+#endif
 
 /**
- * \brief Close subscription connection
- * \param c Connection state
+ * \brief Starts the pubsub network connection
  */
-void subnet_close(struct subnet_conn *c);
+void publisher_start();
 
 /**
- * \brief Prepare packetbuf for a publish towards the given sink
- * \param c Connection state
- * \param sink Sink to send data to
+ * \brief Sets a static reading for this node that will be included in all readings
+ * \param t The type of reading
+ * \param reading The value of the reading
+ * \param sz The size of the read value
  */
-void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink);
+void publisher_always_has(reading_type t, void *reading, size_t sz);
 
 /**
- * \brief Add data for a subscription to the current publish
- * \param c Connection state
- * \param subid Subscription data is being added for
- * \param payload Data
- * \param bytes Number of bytes of data being added
- * \return True if data was added, false if no more data can be added
+ * \brief Indicates that this node can produce readings of the given type
+ * \param t Supported reading type
+ * \param sz Size of this reading type
  */
-bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t bytes);
+void publisher_has(reading_type t, size_t sz);
 
 /**
- * \brief Send publishe data packet
- * \param c Connection state
+ * \brief Determine if readings are needed
+ * \return true if readings are needed, false otherwise
  */
-void subnet_publish(struct subnet_conn *c);
+bool publisher_in_need();
 
 /**
- * \brief Send out a new subscription
- * \param c Connection state
- * \return The subscription id of the new subscription
+ * \brief Determine if the given reading is needed
+ * \param t Type of reading
+ * \return true if a new reading is needed, false otherwise
  */
-short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
+bool publisher_needs(reading_type t);
 
 /**
- * \brief End the given subscription
- * \param c Connection state
- * \param subid Subscription to remove
+ * \brief Publish a new value for the given reading
+ * \param t Type of the reading
+ * \param reading Value of the reading
  */
-void subnet_unsubscribe(struct subnet_conn *c, short subid);
+void publisher_publish(reading_type t, void *reading);
 
+#endif /* __PUBSUB_PUB_H__ */
+/** @} */
+/*
+ * vim:syntax=cpp.doxygen:
+ */

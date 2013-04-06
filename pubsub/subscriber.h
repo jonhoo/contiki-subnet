@@ -1,54 +1,39 @@
+/**
+ * \addtogroup pubsub
+ * @{
+ *
+ * Subscriber nodes are nodes that want to hear readings.
+ */
+
+/**
+ * \file   Header file for a subscriber node
+ * \author Jon Gjengset <jon@tsp.io>
+ */
+
+#ifndef __PUBSUB_SUB_H__
+#define __PUBSUB_SUB_H__
 #include "lib/pubsub/common.h"
-
-void subscriber_start(*ss, void (*on_reading)(struct readings *));
-void subscriber_subscribe(*ss, reading_type rt, int periodicity, size_t rs);
-void * subscriber_data(*ss, rimeaddr_t node, reading_type rt);
-
-subscriber_filter(*ss, reading_type rt, cmp_operator op, void * a, void * b);
-subscriber_filter(*ss, reading_type rt, cmp_operator op, void * a);
-subscriber_satisfy(*ss, reading_type rt, cmp_operator op, void * a, void * b);
-subscriber_satisfy(*ss, reading_type rt, cmp_operator op, void * a);
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Starts the pubsub network connection
+ */
+void subscriber_start(void (*on_reading)(struct readings *));
 
 /**
- * \brief Close subscription connection
- * \param c Connection state
+ * \brief Starts a subscription with the given parameters
+ * \return Subscription id of the new subscription
  */
-void subnet_close(struct subnet_conn *c);
+short subscriber_subscribe(struct subscription s);
 
 /**
- * \brief Prepare packetbuf for a publish towards the given sink
- * \param c Connection state
- * \param sink Sink to send data to
+ * \brief Ends the given subscription
+ * \param subid ID of subscription to end
  */
-void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink);
+void subscriber_unsubscribe(short subid);
+/*---------------------------------------------------------------------------*/
 
-/**
- * \brief Add data for a subscription to the current publish
- * \param c Connection state
- * \param subid Subscription data is being added for
- * \param payload Data
- * \param bytes Number of bytes of data being added
- * \return True if data was added, false if no more data can be added
+#endif /* __PUBSUB_SUB_H__ */
+/** @} */
+/*
+ * vim:syntax=cpp.doxygen:
  */
-bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t bytes);
-
-/**
- * \brief Send publishe data packet
- * \param c Connection state
- */
-void subnet_publish(struct subnet_conn *c);
-
-/**
- * \brief Send out a new subscription
- * \param c Connection state
- * \return The subscription id of the new subscription
- */
-short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
-
-/**
- * \brief End the given subscription
- * \param c Connection state
- * \param subid Subscription to remove
- */
-void subnet_unsubscribe(struct subnet_conn *c, short subid);
-
