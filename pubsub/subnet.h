@@ -45,6 +45,7 @@
 #define SUBNET_PACKET_TYPE_PUBLISH 1
 #define SUBNET_PACKET_TYPE_REPLY 0
 #define SUBNET_PACKET_TYPE_UNSUBSCRIBE 2
+#define SUBNET_PACKET_TYPE_INVALIDATE SUBNET_PACKET_TYPE_UNSUBSCRIBE
 
 #define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_TYPE, 2*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ATTR_EFRAGMENTS,   8*PACKETBUF_ATTR_BIT }, \
@@ -52,7 +53,7 @@
                            { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
 /*---------------------------------------------------------------------------*/
-struct fragment {
+static struct fragment {
   short subid;
   size_t length;
 };
@@ -60,7 +61,7 @@ struct fragment {
 /**
  * \brief Information about a single next hop
  */
-struct neighbor {
+static struct neighbor {
   rimeaddr_t addr;
   short cost; /* advertised cost for this hop by next hop */
   unsigned long last_active; /* last time this next hop was heard from */
@@ -69,13 +70,13 @@ struct neighbor {
 /**
  * \brief Information about next hops to a single sink
  */
-struct sink_route {
+static struct sink_route {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
   short numhops;
   struct neighbor *nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 };
-
+/*---------------------------------------------------------------------------*/
 /**
  * \brief Subnet connection state
  */
@@ -97,7 +98,7 @@ struct subnet_conn {
   struct queuebuf *sentpacket;      /* store a publish message until it has been
                                        sent to the next hop */
 };
-/*---------------------------------------------------------------------------*/
+
 struct subnet_callbacks {
   /* called if no next hop can be contacted */
   void (* errpub)(struct subnet_conn *c);

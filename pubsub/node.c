@@ -45,7 +45,7 @@ PROCESS_THREAD(node_process, ev, data)
 
   while(1) {
     // When data is needed, read and publish
-    PROCESS_WAIT_EVENT_UNTIL(publisher_needs(&ps));
+    PROCESS_WAIT_EVENT_UNTIL(publisher_in_need(&ps));
 
     // Only read sensor if needed
 #if HAS_HUMIDITY

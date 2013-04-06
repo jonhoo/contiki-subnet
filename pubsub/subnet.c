@@ -21,7 +21,6 @@ static const struct packetbuf_attrlist attributes[] = {
     PACKETBUF_ATTR_LAST
   };
 
-#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -103,6 +102,7 @@ static void broadcast(struct adisclose_conn *c) {
    * since this is a broadcast and we don't want to wait for ACKs */
   disclose_send((struct disclose_conn *) c, &rimeaddr_node_addr);
 }
+
 /*
  * This function deserves some explanation.
  * It takes a pointer to a fragment pointer and a pointer to a payload pointer.
@@ -113,7 +113,7 @@ static void broadcast(struct adisclose_conn *c) {
  * This function should only be called as many times as there are fragments in
  * the packet.
  */
-short next_fragment(struct fragment **raw, void **payload) {
+static short next_fragment(struct fragment **raw, void **payload) {
   short subid = (*raw)->subid;
   size_t length = (*raw)->length;
   /* move past subid + length */
@@ -124,8 +124,8 @@ short next_fragment(struct fragment **raw, void **payload) {
   SKIPBYTES(*raw, struct fragment *, length);
   return subid;
 }
-/*---------------------------------------------------------------------------*/
-void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *from) {
+
+static void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *from) {
   int i;
   struct neighbor *n = NULL;
   struct sink_route *route = NULL;
@@ -215,7 +215,7 @@ void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *from) {
   }
 }
 
-void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
+static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   bool unsubscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE);
 
   if (c->u->exists == NULL) {
@@ -298,6 +298,9 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     /* packetbuf now holds info about subscription */
     adisclose_send(&c->peer, from);
 
+  } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_INVALIDATE) {
+    handle_subscriptions(c, sink, from);
+  }
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
     handle_subscriptions(c, sink, from);
   }
@@ -350,6 +353,8 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
         numunknowns++;
       }
     );
+
+    /* TODO: Send invalidate for known unsubscriptions */
 
     /* ask peer for clarification */
     struct queuebuf *q = queuebuf_new_from_packetbuf();
