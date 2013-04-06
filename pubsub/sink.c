@@ -6,7 +6,7 @@
  */
 
 #include "contiki.h"
-#include "subscriber.h"
+#include "lib/pubsub/subscriber.h"
 #include "readings.h"
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/

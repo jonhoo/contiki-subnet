@@ -1,10 +1,8 @@
 CONTIKI = ..
 
-CONTIKI_PROJECT = pubsub
+CONTIKI_PROJECT = node sink van
 
 all: $(CONTIKI_PROJECT)
-
-CONTIKI_SOURCEFILES += publisher.c subscriber.c
 
 include $(CONTIKI)/Makefile.include
 

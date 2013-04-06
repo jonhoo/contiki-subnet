@@ -7,7 +7,7 @@
  */
 
 #include "contiki.h"
-#include "publisher.h"
+#include "lib/pubsub/publisher.h"
 #include "readings.h"
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
