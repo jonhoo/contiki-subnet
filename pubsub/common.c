@@ -16,20 +16,20 @@ static int numsubscriptions;
 static struct pubsub_state *state;
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static void on_subscribe(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
-static void on_unsubscribe(struct subnet_conn *c, const rimeaddr_t *sink, short subid)
-static bool on_exists(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
-static size_t on_inform(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *target);
+static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
+static void on_unsubscribe(struct subnet_conn *c, int sink, short subid)
+static bool on_exists(struct subnet_conn *c, int sink, short subid);
+static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
-struct subscription * find_subscription(const rimeaddr_t *sink, short subid) {
+struct full_subscription * find_subscription(int sink, short subid) {
   struct full_subscription *s;
   for (int i = 0; i < numsubscriptions; i++) {
     s = &subscriptions[i];
     if (s->subid != subid) {
       continue;
     }
-    if (rimeaddr_cmp(&s->sink, sink)) {
+    if (s->sink == sink) {
       return s;
     }
   }
@@ -37,19 +37,13 @@ struct subscription * find_subscription(const rimeaddr_t *sink, short subid) {
   return NULL;
 }
 
-void pubsub_init(
-  void (* on_errpub)(struct subnet_conn *c),
-  void (* on_ondata)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data),
-  void (* on_onsent)(struct subnet_conn *c, const rimeaddr_t *sink, short subid),
-  void (* on_change)()
-  )
-{
+void pubsub_init(struct pubsub_callbacks *u) {
   static struct full_subscription[PUBSUB_MAX_SUBSCRIPTIONS] ss;
   static struct pubsub_state s;
   static struct subnet_callbacks u = {
-    on_errpub,
-    on_ondata,
-    on_onsent,
+    u->on_errpub,
+    u->on_ondata,
+    u->on_onsent,
     on_subscribe,
     on_unsubscribe,
     on_exists,
@@ -58,18 +52,30 @@ void pubsub_init(
 
   subscriptions = &ss;
   state = &s;
-  state->on_change = onchange;
 
   subnet_open(&state->c, 14159, 26535, &u);
 }
 
-int get_subscriptions(struct full_subscription **ss) {
+int pubsub_get_subscriptions(struct full_subscription **ss) {
   *s = subscriptions;
   return numsubscriptions;
 }
+
+bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
+  return subnet_add_data(s->c, sinkid, subid, payload, bytes);
+}
+void pubsub_publish(int sinkid) {
+  subnet_publish(s->c, sinkid);
+}
+short pubsub_subscribe(void *payload, size_t bytes) {
+  return subnet_subscribe(s->c, payload, bytes);
+}
+void pubsub_unsubscribe(short subid) {
+  subnet_unsubscribe(s->c, subid);
+}
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
-static void on_subscribe(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data) {
+static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data) {
   if (numsubscriptions == PUBSUB_MAX_SUBSCRIPTIONS) {
     PRINTF("Subscription buffer full!");
     return;
@@ -77,20 +83,23 @@ static void on_subscribe(struct subnet_conn *c, const rimeaddr_t *sink, short su
 
   struct full_subscription *s = &subscriptions[numsubscriptions];
   s->subid = subid;
-  rimeaddr_copy(&s->sink, sink);
+  s->sink = sink;
   memcpy(&s->in, data, sizeof(struct subscription));
   numsubscriptions++;
 
-  /* TODO: find a way of batching on_change calls */
-  if (state->on_change != NULL) {
-    state->on_change();
+  if (c->u->on_subscription != NULL) {
+    c->u->on_subscription(s);
   }
 }
 
-static void on_unsubscribe(struct subnet_conn *c, const rimeaddr_t *sink, short subid) {
+static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
   struct full_subscription *remove = find_subscription(sink, subid);
   if (remove == NULL) {
     return;
+  }
+
+  if (c->u->on_unsubscription != NULL) {
+    c->u->on_unsubscription(remove);
   }
 
   if (numsubscriptions > 1) {
@@ -98,17 +107,13 @@ static void on_unsubscribe(struct subnet_conn *c, const rimeaddr_t *sink, short 
     memcpy(remove, last, sizeof(struct full_subscription));
   }
   numsubscriptions--;
-
-  if (state->on_change != NULL) {
-    state->on_change();
-  }
 }
 
-static bool on_exists(struct subnet_conn *c, const rimeaddr_t *sink, short subid) {
+static bool on_exists(struct subnet_conn *c, int sink, short subid) {
   return find_subscription(sink, subid) != NULL;
 }
 
-static size_t on_inform(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *target) {
+static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target) {
   struct full_subscription *s = find_subscription(sink, subid);
   if (s == NULL) {
     return 0;
