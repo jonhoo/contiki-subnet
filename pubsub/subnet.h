@@ -107,7 +107,7 @@ struct subnet_callbacks {
   void (* errpub)(struct subnet_conn *c);
 
   /* called when a publish is received. Note that data MUST be copied if it is
-   * to be reused later as the memory WILL be reclaimed */
+   * to be reused later as the memory WILL be reclaimed. */
   void (* ondata)(struct subnet_conn *c, int sinkid, short subid, void *data);
 
   /* called when a publish was sent successfully */
@@ -120,7 +120,9 @@ struct subnet_callbacks {
   /* called when a subscription is cancelled */
   void (* unsubscribe)(struct subnet_conn *c, int sinkid, short subid);
 
-  /* should return true if the given subscription is known */
+  /* should return true if the given subscription is known. Note that this
+   * function may be called quite frequently, so it may be well worth to
+   * optimize */
   bool (* exists)(struct subnet_conn *c, int sinkid, short subid);
 
   /* should fill target with information about the given subscription and return
@@ -170,6 +172,9 @@ void subnet_publish(struct subnet_conn *c, int sinkid);
  * \brief Send out a new subscription
  * \param c Connection state
  * \return The subscription id of the new subscription
+ *
+ * TODO: Allow multiple subscriptions in a single send?
+ * TODO: Should broadcast even if exists
  */
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
 
@@ -179,6 +184,16 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
  * \param subid Subscription to remove
  */
 void subnet_unsubscribe(struct subnet_conn *c, short subid);
+
+/**
+ * \brief Returns this node's sink id
+ * \param c Connection state
+ * \return this node's sink id or -1 if not known
+ *
+ * Note that this function will only return something sensible after the first
+ * subscription has been sent out!
+ */
+int subnet_myid(struct subnet_conn *c);
 /*---------------------------------------------------------------------------*/
 
 #endif /* __SUBNET_H__ */
