@@ -8,49 +8,177 @@
  * \author Jon Gjengset <jon@tsp.io>
  */
 #include "lib/pubsub/publisher.h"
+#include "sys/ctimer.h"
 
+/*---------------------------------------------------------------------------*/
+/* private functions */
+static void on_errpub(struct subnet_conn *c);
+static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
+static void on_onsent(struct subnet_conn *c, int sink, short subid);
+static void on_subscription(struct full_subscription *s);
+static void on_unsubscription(struct full_subscription *old);
+static void on_collect_timer_expired(void *tp);
+static void on_aggregate_timer_expired(void *sinkp);
+static void set_needs(enum reading_type t, bool need);
+static void aggregate_trigger(int sink);
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct process *etarget;
-/* #define PUBSUB_MAX_SUBSCRIPTIONS */
-/*---------------------------------------------------------------------------*/
-/* private functions */
-void on_errpub(struct subnet_conn *c);
-void on_ondata(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
-void on_onsent(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
-void on_change();
-void on_timer_expired();
-void set_needs(reading_type t, bool yes);
-size_t get_sizeof(reading_type t);
+static struct pubsub_callbacks callbacks = {
+  on_errpub,
+  on_ondata,
+  on_onsent,
+
+  on_subscription,
+  on_unsubscription
+};
+
+static struct ctimer aggregate[SUBNET_MAX_SINKS];
+static int is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
+
+static struct ctimer collect[PUBSUB_MAX_SENSORS];
+static size_t rsize[PUBSUB_MAX_SENSORS];
+
+static bool needs[PUBSUB_MAX_SENSORS];
+static int numneeds;
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start() {
+  clock_time_t max = ~0;
+  int i;
+
   etarget = PROCESS_CURRENT();
-  pubsub_init(on_errpub, on_ondata, on_onsent, on_change);
+  pubsub_init(&callbacks);
+  numneeds = 0;
+  for (i = 0; i < PUBSUB_MAX_SENSORS; i++) {
+    rsize[i] = 0;
+    needs[i] = false;
+
+    /* make sure we will chos eany period over this one */
+    collect[i].etimer.timer.interval = max;
+  }
+
+  for (i = 0; i < SUBNET_MAX_SINKS; i++) {
+    /* because ctimer_set needs a void* to pass to the callback, we can't just
+     * pass &i since it will not point the same place when the callback is
+     * invoked. Instead, we do this ugly workaround. We set up a static integer
+     * array where each index points to its own value. We can then use the
+     * address of each element for the pointer to pass to the callback. Yay :( */
+    is[i] = i;
+    ctimer_set(&aggregate[i], max, &on_aggregate_timer_expired, &is[i]);
+    ctimer_stop(&aggregate[i]);
+
+    /* makes ctimer_expired return true before the timer was started */
+    aggregate[i].etimer.p = PROCESS_NONE;
+  }
 }
-void publisher_always_has(reading_type t, void *reading, size_t sz);
-void publisher_has(reading_type t, size_t sz);
+void publisher_has(enum reading_type t, size_t sz) {
+  rsize[t] = sz;
+}
 bool publisher_in_need() {
   return numneeds > 0;
 }
-bool publisher_needs(reading_type t) {
-  return needs.contains(t);
+bool publisher_needs(enum reading_type t) {
+  return needs[t];
 }
-void publisher_publish(reading_type t, void *reading) {
-  pubsub_add_data(/*subid,*/ reading, get_sizeof(t));
-  set_needs(n, false);
-  if (!publisher_in_need()) {
-    pubsub_publish();
+void publisher_publish(enum reading_type t, void *reading) {
+  /* TODO: soft and hard filtering */
+  set_needs(t, false);
+
+  struct full_subscription *s;
+
+  for (int subs = pubsub_get_subscriptions(&s); subs >= 0; subs--) {
+    if (s->in.sensor == t) {
+      /* TODO: check return value */
+      pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
+
+      aggregate_trigger(s->sink);
+    }
+
+    s++;
   }
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
-void on_timer_expired() {
-  pubsub_prepublish(/*sink*/);
-  for (n in needs) {
-    set_needs(n, true);
+static void on_subscription(struct full_subscription *s) {
+  struct ctimer c = collect[s->in.sensor];
+  if (s->in.interval < c.etimer.timer.interval) {
+    ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
   }
-  process_post(etarget, PROCESS_EVENT_PUBLISH /*, data*/);
+}
+static void on_unsubscription(struct full_subscription *old) {
+  struct full_subscription *s;
+  struct ctimer c = collect[s->in.sensor];
+  ctimer_stop(&c);
+  clock_time_t max = ~0;
+  clock_time_t min = max;
+
+  enum reading_type t = old->in.sensor;
+
+  for (int subs = pubsub_get_subscriptions(&s); subs >= 0; subs--) {
+    if (s->in.sensor != t) continue;
+    if (s == old) continue;
+
+    if (s->in.interval < min) {
+      min = s->in.interval;
+    }
+    s++;
+  }
+
+  if (min == max) {
+    /* we now have no subscriptions for this timer, so no need to start it */
+    /* we have to set the interval to max for the check in on_subscription to
+     * keep working */
+    c.etimer.timer.interval = max;
+    return;
+  }
+
+  ctimer_set(&c, min, &on_collect_timer_expired, &s->in.sensor);
+}
+static void aggregate_trigger(int sink) {
+  if (ctimer_expired(&aggregate[sink])) {
+    ctimer_restart(&aggregate[sink]);
+  }
+}
+static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
+  struct full_subscription *s = find_subscription(sink, subid);
+
+  /* TODO: check return value */
+  pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
+  aggregate_trigger(sink);
+}
+static void on_errpub(struct subnet_conn *c) {
+  /* TODO */
+}
+static void on_onsent(struct subnet_conn *c, int sink, short subid) {
+  /* TODO */
+}
+static void set_needs(enum reading_type t, bool need) {
+  bool n = needs[t];
+  if (n && !need) {
+    numneeds--;
+  } else if (!n && need) {
+    numneeds++;
+  }
+  needs[t] = need;
+}
+static void on_collect_timer_expired(void *tp) {
+  enum reading_type t = *((enum reading_type *)tp);
+  if (rsize[t] == 0) {
+    /* node doesn't have this sensor */
+    /* TODO: take hard filtering into account here? */
+    publisher_publish(t, NULL);
+  } else {
+    set_needs(t, true);
+    process_post(etarget, PROCESS_EVENT_PUBLISH, tp);
+  }
+
+  ctimer_reset(&collect[t]);
+}
+static void on_aggregate_timer_expired(void *sinkp) {
+  int sink = *((int *)sinkp);
+  /* TODO: call aggregator */
+  pubsub_publish(sink);
 }
 /*---------------------------------------------------------------------------*/
 /** @} */

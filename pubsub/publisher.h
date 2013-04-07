@@ -26,19 +26,11 @@
 void publisher_start();
 
 /**
- * \brief Sets a static reading for this node that will be included in all readings
- * \param t The type of reading
- * \param reading The value of the reading
- * \param sz The size of the read value
- */
-void publisher_always_has(reading_type t, void *reading, size_t sz);
-
-/**
  * \brief Indicates that this node can produce readings of the given type
  * \param t Supported reading type
  * \param sz Size of this reading type
  */
-void publisher_has(reading_type t, size_t sz);
+void publisher_has(enum reading_type t, size_t sz);
 
 /**
  * \brief Determine if readings are needed
@@ -51,14 +43,14 @@ bool publisher_in_need();
  * \param t Type of reading
  * \return true if a new reading is needed, false otherwise
  */
-bool publisher_needs(reading_type t);
+bool publisher_needs(enum reading_type t);
 
 /**
  * \brief Publish a new value for the given reading
  * \param t Type of the reading
  * \param reading Value of the reading
  */
-void publisher_publish(reading_type t, void *reading);
+void publisher_publish(enum reading_type t, void *reading);
 
 #endif /* __PUBSUB_PUB_H__ */
 /** @} */
