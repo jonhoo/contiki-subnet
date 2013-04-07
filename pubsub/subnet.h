@@ -53,15 +53,16 @@
                            { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
 /*---------------------------------------------------------------------------*/
-static struct fragment {
+/* private structs */
+struct fragment {
   short subid;
   size_t length;
 };
-/*---------------------------------------------------------------------------*/
+
 /**
  * \brief Information about a single next hop
  */
-static struct neighbor {
+struct neighbor {
   rimeaddr_t addr;
   short cost; /* advertised cost for this hop by next hop */
   unsigned long last_active; /* last time this next hop was heard from */
@@ -70,7 +71,7 @@ static struct neighbor {
 /**
  * \brief Information about next hops to a single sink
  */
-static struct sink {
+struct sink {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
   short numhops;
@@ -81,6 +82,7 @@ static struct sink {
   char buf[PACKETBUF_SIZE];
 };
 /*---------------------------------------------------------------------------*/
+/* public structs */
 /**
  * \brief Subnet connection state
  */
@@ -95,6 +97,9 @@ struct subnet_conn {
 
   short numneighbors;               /* number of neighbors known */
   struct neighbor neighbors[SUBNET_MAX_NEIGHBORS];
+
+  struct queuebuf *sentpacket;      /* store a publish message until it has been
+                                       sent to the next hop */
 };
 
 struct subnet_callbacks {
@@ -124,6 +129,7 @@ struct subnet_callbacks {
   size_t (* inform)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *target);
 };
 /*---------------------------------------------------------------------------*/
+/* public functions */
 /**
  * \brief Open a new subscription connection
  * \param c Memory space for connection state
@@ -143,27 +149,22 @@ void subnet_open(struct subnet_conn *c,
 void subnet_close(struct subnet_conn *c);
 
 /**
- * \brief Prepare packetbuf for a publish towards the given sink
- * \param c Connection state
- * \param sink Sink to send data to
- */
-void subnet_prepublish(struct subnet_conn *c, const rimeaddr_t *sink);
-
-/**
  * \brief Add data for a subscription to the current publish
  * \param c Connection state
+ * \param sink Sink to send data to
  * \param subid Subscription data is being added for
  * \param payload Data
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool subnet_add_data(struct subnet_conn *c, short subid, void *payload, size_t bytes);
+bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *payload, size_t bytes);
 
 /**
  * \brief Send publishe data packet
  * \param c Connection state
+ * \param sink Sink to send data to
  */
-void subnet_publish(struct subnet_conn *c);
+void subnet_publish(struct subnet_conn *c, const rimeaddr_t *sink);
 
 /**
  * \brief Send out a new subscription
@@ -178,6 +179,7 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
  * \param subid Subscription to remove
  */
 void subnet_unsubscribe(struct subnet_conn *c, short subid);
+/*---------------------------------------------------------------------------*/
 
 #endif /* __SUBNET_H__ */
 /** @} */

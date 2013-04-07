@@ -34,7 +34,7 @@ static const struct packetbuf_attrlist attributes[] = {
     int fragi;                                                   \
     short subid;                                                 \
     short fragments = FRAGMENTS;                                 \
-    struct fragment *frag = BUF;                                 \
+    struct fragment *frag = (struct fragment *) BUF;             \
     void *payload;                                               \
                                                                  \
     for (fragi = 0; fragi < fragments; fragi++) {                \
@@ -55,16 +55,24 @@ static const struct packetbuf_attrlist attributes[] = {
   /* note the cast to char* to be able to move in bytes */       \
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
-static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
-  for (i = 0; i < c->numsinks; i++) {
+static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
+  for (int i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
-      return c->sinks[i].advertised_cost;
+      return &c->sinks[i];
     }
   }
 
-  return 0;
+  return NULL;
 }
-static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink route, const rimeaddr_t *prevto) {
+static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
+  struct sink *s = find_sink(c, sink);
+  if (s == NULL) {
+    return 0;
+  }
+
+  return s->advertised_cost;
+}
+static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto) {
   int i;
   struct neighbor *n = NULL;
   struct neighbor *next;
@@ -84,11 +92,11 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink route, 
 
   /* find next most expensive route after n */
   next = n;
-  for (i = 0; i < route.numhops; i++) {
-    if (next == NULL || route.nexthops[i]->cost > next.cost) {
+  for (i = 0; i < route->numhops; i++) {
+    if (next == NULL || route->nexthops[i]->cost > next->cost) {
       /* TODO: Deal with multiple next hops with the same cost */
       /* TODO: Handle link quality? */
-      next = route.nexthops[i];
+      next = route->nexthops[i];
     }
   }
 
@@ -97,7 +105,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink route, 
     return NULL;
   }
 
-  return n->addr;
+  return &n->addr;
 }
 
 static void broadcast(struct adisclose_conn *c) {
@@ -130,11 +138,10 @@ static short next_fragment(struct fragment **raw, void **payload) {
   return subid;
 }
 
-static void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *from) {
+static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   int i;
   struct neighbor *n = NULL;
   struct sink *route = NULL;
-  struct neighbor *cheap;
   struct neighbor *oldest;
   int oldesti;
 
@@ -170,7 +177,7 @@ static void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *f
   /* find route to sink */
   for (i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
-      route = &c->sinks[i]
+      route = &c->sinks[i];
     }
   }
 
@@ -192,19 +199,14 @@ static void update_routes(struct subnet_conn *c, rimeaddr_t *sink, rimeaddr_t *f
   }
 
   /* find cheapest and oldest next hop towards sink */
-  cheap = n;
   oldest = n;
   for (i = 0; i < route->numhops; i++) {
     if (rimeaddr_cmp(&route->nexthops[i]->addr, from)) {
       n = NULL;
     }
 
-    if (route->nexthops[i]->cost < cheapest->cost) {
-      cheapest = &route->nexthops[i];
-    }
-
     if (route->nexthops[i]->last_active < oldest->last_active) {
-      oldest = &route->nexthops[i];
+      oldest = route->nexthops[i];
       oldesti = i;
     }
   }
@@ -319,7 +321,6 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
 
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_INVALIDATE) {
     handle_subscriptions(c, sink, from);
-  }
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
     handle_subscriptions(c, sink, from);
   }
@@ -393,9 +394,10 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
  * Called if a forwarding/sending failed. Should try next host in alternate list
  * or call errpub callback if no more alternates are available
  */
-static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
+static void on_timedout(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
+  struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  struct sink s = find_sink(sink);
+  struct sink *s = find_sink(c, sink);
   const rimeaddr_t *nexthop = get_next_hop(c, s, to);
 
   if (nexthop == NULL) {
@@ -418,7 +420,7 @@ static void on_timedout(struct adisclose_conn *c, const rimeaddr_t *to) {
 static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  struct sink s = find_sink(sink);
+  struct sink *s = find_sink(c, sink);
 
   clean_buffers(c, s);
   if (c->u->onsent == NULL) {
@@ -462,7 +464,7 @@ void subnet_close(struct subnet_conn *c) {
 }
 
 bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *payload, size_t bytes) {
-  struct sink s = find_sink(sink);
+  struct sink *s = find_sink(c, sink);
   if (s == NULL) {
     return false;
   }
@@ -485,13 +487,13 @@ bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid,
 }
 
 void subnet_publish(struct subnet_conn *c, const rimeaddr_t *sink) {
-  struct sink s = find_sink(sink);
+  struct sink *s = find_sink(c, sink);
   if (s == NULL) {
     return;
   }
 
   const rimeaddr_t *nexthop = get_next_hop(c, s, NULL);
-  if (nexthop == NULL || adisclose_is_transmitting(c)) {
+  if (nexthop == NULL || adisclose_is_transmitting(&c->pubsub)) {
     if (c->u->errpub != NULL) {
       c->u->errpub(c);
     }
