@@ -78,7 +78,7 @@ struct sink {
   struct neighbor *nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 
   short fragments;
-  int buflen;
+  size_t buflen;
   char buf[PACKETBUF_SIZE];
 };
 /*---------------------------------------------------------------------------*/
@@ -108,25 +108,25 @@ struct subnet_callbacks {
 
   /* called when a publish is received. Note that data MUST be copied if it is
    * to be reused later as the memory WILL be reclaimed */
-  void (* ondata)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
+  void (* ondata)(struct subnet_conn *c, int sinkid, short subid, void *data);
 
   /* called when a publish was sent successfully */
-  void (* onsent)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+  void (* onsent)(struct subnet_conn *c, int sinkid, short subid);
 
   /* called when a new subscription is in packetbuf. Note that data MUST be
    * copied if it is to be reused later as the memory WILL be reclaimed */
-  void (* subscribe)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *data);
+  void (* subscribe)(struct subnet_conn *c, int sinkid, short subid, void *data);
 
   /* called when a subscription is cancelled */
-  void (* unsubscribe)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+  void (* unsubscribe)(struct subnet_conn *c, int sinkid, short subid);
 
   /* should return true if the given subscription is known */
-  bool (* exists)(struct subnet_conn *c, const rimeaddr_t *sink, short subid);
+  bool (* exists)(struct subnet_conn *c, int sinkid, short subid);
 
   /* should fill target with information about the given subscription and return
    * the number of bytes written. It is up to this function to make sure the
    * packet is not overfilled (by checking packetbuf_totlen()) */
-  size_t (* inform)(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *target);
+  size_t (* inform)(struct subnet_conn *c, int sinkid, short subid, void *target);
 };
 /*---------------------------------------------------------------------------*/
 /* public functions */
@@ -151,20 +151,20 @@ void subnet_close(struct subnet_conn *c);
 /**
  * \brief Add data for a subscription to the current publish
  * \param c Connection state
- * \param sink Sink to send data to
+ * \param sinkid Sink to send data to
  * \param subid Subscription data is being added for
  * \param payload Data
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *payload, size_t bytes);
+bool subnet_add_data(struct subnet_conn *c, int sinkid, short subid, void *payload, size_t bytes);
 
 /**
  * \brief Send publishe data packet
  * \param c Connection state
  * \param sink Sink to send data to
  */
-void subnet_publish(struct subnet_conn *c, const rimeaddr_t *sink);
+void subnet_publish(struct subnet_conn *c, int sinkid);
 
 /**
  * \brief Send out a new subscription

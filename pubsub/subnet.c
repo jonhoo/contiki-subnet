@@ -55,14 +55,21 @@ static const struct packetbuf_attrlist attributes[] = {
   /* note the cast to char* to be able to move in bytes */       \
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
-static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
+static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
   for (int i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
-      return &c->sinks[i];
+      return i;
     }
   }
 
-  return NULL;
+  return -1;
+}
+static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
+  int sinkid = find_sinkid(c, sink);
+  if (sinkid == -1) {
+    return NULL;
+  }
+  return &c->sinks[sinkid];
 }
 static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
   struct sink *s = find_sink(c, sink);
@@ -224,17 +231,17 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   }
 }
 
-static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
+static void handle_subscriptions(struct subnet_conn *c, int sinkid, const rimeaddr_t *from) {
   bool unsubscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE);
 
   if (c->u->exists == NULL) {
     return;
   }
 
-  update_routes(c, sink, from);
+  update_routes(c, &c->sinks[sinkid].sink, from);
 
   EACH_PACKET_FRAGMENT(
-    if (!!c->u->exists(c, sink, subid) == unsubscribe) {
+    if (!!c->u->exists(c, sinkid, subid) == unsubscribe) {
       /* something changed, send new subscription to neighbours */
       broadcast(&c->pubsub);
       break;
@@ -246,11 +253,11 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   }
 
   EACH_PACKET_FRAGMENT(
-    if (!!c->u->exists(c, sink, subid) == unsubscribe) {
+    if (!!c->u->exists(c, sinkid, subid) == unsubscribe) {
       if (unsubscribe) {
-        c->u->unsubscribe(c, sink, subid);
+        c->u->unsubscribe(c, sinkid, subid);
       } else {
-        c->u->subscribe(c, sink, subid, payload);
+        c->u->subscribe(c, sinkid, subid, payload);
       }
     }
   );
@@ -273,6 +280,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
    * subnet_conn */
   struct subnet_conn *c = (struct subnet_conn *)(adisclose-1);
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
+  int sinkid = find_sinkid(c, sink);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_ASK) {
     if (!rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER), &rimeaddr_node_addr)) {
@@ -301,7 +309,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
       for (i = 0; i < fragments; i++) {
         packetbuf_set_datalen(packetbuf_datalen() + sizeof(struct fragment));
         frag->subid = subids[i];
-        frag->length = c->u->inform(c, sink, subids[i], frag+1);
+        frag->length = c->u->inform(c, sinkid, subids[i], frag+1);
 
         if (frag->length == 0) {
           /* don't put an empty fragment in there */
@@ -320,9 +328,9 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     adisclose_send(&c->peer, from);
 
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_INVALIDATE) {
-    handle_subscriptions(c, sink, from);
+    handle_subscriptions(c, sinkid, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
-    handle_subscriptions(c, sink, from);
+    handle_subscriptions(c, sinkid, from);
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -334,13 +342,16 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
 static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno) {
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
+  int sinkid;
 
   if (c->u->ondata == NULL) {
     return;
   }
 
+  sinkid = find_sinkid(c, sink);
+
   EACH_PACKET_FRAGMENT(
-    c->u->ondata(c, sink, subid, payload);
+    c->u->ondata(c, sinkid, subid, payload);
   );
 }
 
@@ -353,11 +364,12 @@ static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
 static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno) {
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
+  int sinkid = find_sinkid(c, sink);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE) {
-    handle_subscriptions(c, sink, from);
+    handle_subscriptions(c, sinkid, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE) {
-    handle_subscriptions(c, sink, from);
+    handle_subscriptions(c, sinkid, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_PUBLISH) {
 
     if (c->u->exists == NULL) {
@@ -368,7 +380,7 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     short unknowns[fragments];
     short numunknowns = 0;
     EACH_PACKET_FRAGMENT(
-      if (!c->u->exists(c, sink, subid)) {
+      if (!c->u->exists(c, sinkid, subid)) {
         unknowns[numunknowns] = subid;
         numunknowns++;
       }
@@ -420,7 +432,8 @@ static void on_timedout(struct adisclose_conn *adisclose, const rimeaddr_t *to) 
 static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  struct sink *s = find_sink(c, sink);
+  int sinkid = find_sinkid(c, sink);
+  struct sink *s = &c->sinks[sinkid];
 
   clean_buffers(c, s);
   if (c->u->onsent == NULL) {
@@ -428,7 +441,7 @@ static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
   }
 
   EACH_SINK_FRAGMENT(s,
-    c->u->onsent(c, sink, subid);
+    c->u->onsent(c, sinkid, subid);
   );
 }
 /*---------------------------------------------------------------------------*/
@@ -463,11 +476,11 @@ void subnet_close(struct subnet_conn *c) {
   adisclose_close(&c->peer);
 }
 
-bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid, void *payload, size_t bytes) {
-  struct sink *s = find_sink(c, sink);
-  if (s == NULL) {
+bool subnet_add_data(struct subnet_conn *c, int sinkid, short subid, void *payload, size_t bytes) {
+  if (sinkid >= c->numsinks) {
     return false;
   }
+  struct sink *s = &c->sinks[sinkid];
 
   uint16_t l = s->buflen;
   size_t sz = sizeof(struct fragment) + bytes;
@@ -486,11 +499,11 @@ bool subnet_add_data(struct subnet_conn *c, const rimeaddr_t *sink, short subid,
   return true;
 }
 
-void subnet_publish(struct subnet_conn *c, const rimeaddr_t *sink) {
-  struct sink *s = find_sink(c, sink);
-  if (s == NULL) {
+void subnet_publish(struct subnet_conn *c, int sinkid) {
+  if (sinkid >= c->numsinks) {
     return;
   }
+  struct sink *s = &c->sinks[sinkid];
 
   const rimeaddr_t *nexthop = get_next_hop(c, s, NULL);
   if (nexthop == NULL || adisclose_is_transmitting(&c->pubsub)) {
@@ -506,9 +519,9 @@ void subnet_publish(struct subnet_conn *c, const rimeaddr_t *sink) {
 
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, &s->sink));
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &s->sink);
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
 
   adisclose_send(&c->pubsub, nexthop);
