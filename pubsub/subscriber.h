@@ -6,7 +6,7 @@
  */
 
 /**
- * \file   Header file for a subscriber node
+ * \file   Header file for subscriber nodes
  * \author Jon Gjengset <jon@tsp.io>
  */
 

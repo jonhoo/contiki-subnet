@@ -6,7 +6,7 @@
  */
 
 /**
- * \file   Header file for a publisher node
+ * \file   Header file for publisher nodes
  * \author Jon Gjengset <jon@tsp.io>
  */
 
