@@ -41,6 +41,7 @@ struct subscription {
   enum hard_filter  hard_filter;
   enum aggregator   aggregator;
   enum reading_type sensor;
+  /* TODO: Add params for soft/hard filter. Need for example for van location */
 };
 struct full_subscription {
   short subid;
@@ -110,9 +111,10 @@ void pubsub_publish(int sinkid);
 
 /**
  * \brief Send out a new subscription
+ * \param s Subscription to add
  * \return The subscription id of the new subscription
  */
-short pubsub_subscribe(void *payload, size_t bytes);
+short pubsub_subscribe(struct subscription *s);
 
 /**
  * \brief End the given subscription

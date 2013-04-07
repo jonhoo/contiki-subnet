@@ -67,8 +67,8 @@ bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
 void pubsub_publish(int sinkid) {
   subnet_publish(s->c, sinkid);
 }
-short pubsub_subscribe(void *payload, size_t bytes) {
-  return subnet_subscribe(s->c, payload, bytes);
+short pubsub_subscribe(struct subscription *s) {
+  short subid = subnet_subscribe(s->c, s, sizeof(struct subscription));
 }
 void pubsub_unsubscribe(short subid) {
   subnet_unsubscribe(s->c, subid);
@@ -110,6 +110,7 @@ static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
 }
 
 static bool on_exists(struct subnet_conn *c, int sink, short subid) {
+  /* TODO: optimize */
   return find_subscription(sink, subid) != NULL;
 }
 
