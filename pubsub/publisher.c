@@ -43,12 +43,12 @@ static bool needs[PUBSUB_MAX_SENSORS];
 static int numneeds;
 
 static bool (* soft_filter)(struct sfilter *f, enum reading_type t, void *data);
-static bool (* hard_filter)(struct hfilter *f, enum reading_type t, void *data);
+static bool (* hard_filter)(struct hfilter *f);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
-  bool (* hard_filter_proxy)(struct hfilter *f, enum reading_type t, void *data)
+  bool (* hard_filter_proxy)(struct hfilter *f)
 ) {
   clock_time_t max = ~0;
   int i;
@@ -96,17 +96,12 @@ void publisher_publish(enum reading_type t, void *reading) {
   set_needs(t, false);
 
   while (pubsub_next_subscription(&s)) {
+    /* TODO: respect individual subscriptions interval? */
     if (s->in.sensor == t) {
       /* don't add data if it doesn't pass the hard filter */
-      if (hard_filter(&s->in.hard, t, reading)) {
-        continue;
-      }
+      if (!hard_filter(&s->in.hard)) continue;
 
-      if (soft_filter(&s->in.soft, t, reading)) {
-        /* soft filtering means we don't send a value, but we still need to
-         * publish the subscription so that other nodes may hear it */
-        added_data = pubsub_add_data(s->sink, s->subid, reading, 0);
-      } else {
+      if (!soft_filter(&s->in.soft, t, reading)) {
         added_data = pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
       }
 
@@ -183,10 +178,7 @@ static void set_needs(enum reading_type t, bool need) {
 }
 static void on_collect_timer_expired(void *tp) {
   enum reading_type t = *((enum reading_type *)tp);
-  if (rsize[t] == 0) {
-    /* node doesn't have this sensor */
-    publisher_publish(t, NULL);
-  } else {
+  if (rsize[t] != 0) {
     set_needs(t, true);
     process_post(etarget, PROCESS_EVENT_PUBLISH, tp);
   }
@@ -196,6 +188,7 @@ static void on_collect_timer_expired(void *tp) {
 static void on_aggregate_timer_expired(void *sinkp) {
   int sink = *((int *)sinkp);
   /* TODO: call aggregator */
+  /* Add a zero-record for every subscription not present and not hard-filtered */
   pubsub_publish(sink);
 }
 /*---------------------------------------------------------------------------*/
