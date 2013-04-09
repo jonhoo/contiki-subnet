@@ -86,8 +86,11 @@ static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink
 }
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto) {
   int i;
+  int previ = -1;
+  int nexti = -1;
   struct neighbor *n = NULL;
   struct neighbor *next;
+  struct neighbor *this;
 
   if (route == NULL) {
     return NULL;
@@ -97,7 +100,9 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   if (prevto != NULL) {
     for (i = 0; i < c->numneighbors; i++) {
       if (rimeaddr_cmp(&c->neighbors[i].addr, prevto)) {
+        previ = i;
         n = &c->neighbors[i];
+        break;
       }
     }
   }
@@ -105,11 +110,35 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   /* find next most expensive route after n */
   next = n;
   for (i = 0; i < route->numhops; i++) {
-    if (next == NULL || route->nexthops[i]->cost > next->cost) {
-      /* TODO: Deal with multiple next hops with the same cost */
-      /* TODO: Handle link quality? */
-      next = route->nexthops[i];
+    this = route->nexthops[i];
+
+    /* previous hop can't be next hop */
+    if (this == n) continue;
+
+    if (n != NULL) {
+      /* next hop can't be better than previous hop */
+      if (this->cost < n->cost) continue;
+      /* nor can it be same cost and before */
+      if (this->cost == n->cost && i < previ) continue;
     }
+
+    /* any node that get's here is valid, so pick the best */
+    /* if we don't have a best, then this is the best */
+    if (next == NULL) {
+      next = this;
+      nexti = i;
+      continue;
+    }
+
+    /* if this is more expensive, don't use it */
+    if (this->cost > next->cost) continue;
+
+    /* if this is same cost and later, don't use it */
+    if (this->cost == next->cost && i > nexti) continue;
+
+    /* here, it's either cheaper or earlier, so it's the best */
+    next = this;
+    nexti = i;
   }
 
   if (next == n || next == NULL) {
