@@ -14,6 +14,7 @@
 /* private functions */
 static enum existance sub_state(struct full_subscription *s);
 static bool is_active(struct full_subscription *s);
+static void next_subscription(struct full_subscription *sub);
 
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
@@ -21,8 +22,11 @@ static enum existance on_exists(struct subnet_conn *c, int sink, short subid);
 static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target);
 /*---------------------------------------------------------------------------*/
 /* private members */
-static struct full_subscription subscriptions[SUBNET_MAX_SINKS][PUBSUB_MAX_SUBSCRIPTIONS];
-static struct full_subscription *past = &subscriptions[SUBNET_MAX_SINKS-1][PUBSUB_MAX_SUBSCRIPTIONS-1]+1;
+struct sink_subscriptions {
+  short maxsub;
+  struct full_subscription subs[PUBSUB_MAX_SUBSCRIPTIONS];
+};
+static struct sink_subscriptions sinks[SUBNET_MAX_SINKS];
 static struct pubsub_state state;
 static struct subnet_callbacks su = {
   NULL,
@@ -36,7 +40,7 @@ static struct subnet_callbacks su = {
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 struct full_subscription * find_subscription(int sink, short subid) {
-  return &subscriptions[sink][subid];
+  return &sinks[sink].subs[subid];
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
@@ -47,8 +51,9 @@ void pubsub_init(struct pubsub_callbacks *u) {
 
   /* all subscriptions are unknown/invalid initially */
   for (int i = 0; i < SUBNET_MAX_SINKS; i++) {
+    sinks[i].maxsub = 0;
     for (int j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
-      subscriptions[i][j].sink = -1;
+      sinks[i].subs[j].sink = -1;
     }
   }
 
@@ -60,21 +65,26 @@ void pubsub_init(struct pubsub_callbacks *u) {
 }
 
 bool pubsub_next_subscription(struct full_subscription *sub) {
+  int sink;
+  short subid;
+
   if (sub == NULL) {
-    /* no previous, start from beginning */
-    sub = &subscriptions[0][0];
+    /* start from beginning */
+    sub = &sinks[0].subs[0];
+    sink = 0;
+    subid = 0;
   } else {
-    /* otherwise, move on */
-    sub++;
+    /* start from next subscription */
+    next_subscription(sub);
   }
 
   /* find next active subscription or the end */
-  while (sub != past && !is_active(sub)) {
-    sub++;
+  while (!is_active(sub)) {
+    next_subscription(sub);
   }
 
   /* if we didn't reach the end, we have a next! */
-  return sub != past;
+  return sub != NULL;
 }
 
 bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
@@ -94,6 +104,25 @@ int pubsub_myid() {
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
+static void next_subscription(struct full_subscription *sub) {
+  int sink = sub->sink;
+  short subid = sub->subid;
+
+  if (subid >= sinks[sink].maxsub) {
+    if (sink == SUBNET_MAX_SINKS-1) {
+      sub = NULL;
+      return;
+    }
+
+    sink++;
+    subid = 0;
+  } else {
+    subid++;
+  }
+
+  sub = &sinks[sink].subs[subid];
+}
+
 static enum existance sub_state(struct full_subscription *s) {
   if (s->sink == -1) {
     /* invalid (never started) subscription */
@@ -116,6 +145,9 @@ static enum existance sub_state(struct full_subscription *s) {
 }
 
 static bool is_active(struct full_subscription *s) {
+  if (s == NULL) {
+    return false;
+  }
   return sub_state(s) == KNOWN;
 }
 
@@ -126,6 +158,10 @@ static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *dat
   s->revoked = 0;
   memcpy(&s->in, data, sizeof(struct subscription));
 
+  if (sinks[sink].maxsub < subid) {
+    sinks[sink].maxsub = subid;
+  }
+
   if (state.u->on_subscription != NULL) {
     state.u->on_subscription(s);
   }
@@ -134,6 +170,11 @@ static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *dat
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
   struct full_subscription *remove = find_subscription(sink, subid);
   if (remove->revoked == 0) {
+    if (sinks[sink].maxsub == subid) {
+      /* This could be changed to find next highest, but... */
+      sinks[sink].maxsub = subid-1;
+    }
+
     remove->revoked = clock_seconds();
 
     if (state.u->on_unsubscription != NULL) {
