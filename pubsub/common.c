@@ -14,7 +14,6 @@
 /* private functions */
 static enum existance sub_state(struct full_subscription *s);
 static bool is_active(struct full_subscription *s);
-static void next_subscription(struct full_subscription *sub);
 
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
@@ -68,23 +67,32 @@ bool pubsub_next_subscription(struct full_subscription *sub) {
   int sink;
   short subid;
 
-  if (sub == NULL) {
-    /* start from beginning */
-    sub = &sinks[0].subs[0];
-    sink = 0;
-    subid = 0;
-  } else {
-    /* start from next subscription */
-    next_subscription(sub);
-  }
-
   /* find next active subscription or the end */
-  while (!is_active(sub)) {
-    next_subscription(sub);
-  }
+  do {
+    if (sub == NULL) {
+      /* start from beginning */
+      sub = &sinks[0].subs[0];
+      sink = 0;
+      subid = 0;
+    } else {
+      if (subid >= sinks[sink].maxsub) {
+        sink++;
 
-  /* if we didn't reach the end, we have a next! */
-  return sub != NULL;
+        if (sink == SUBNET_MAX_SINKS) {
+          sub = NULL;
+          return false;
+        }
+
+        subid = 0;
+      } else {
+        subid++;
+      }
+
+      sub = &sinks[sink].subs[subid];
+    }
+  } while (!is_active(sub));
+
+  return true;
 }
 
 bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
@@ -104,25 +112,6 @@ int pubsub_myid() {
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
-static void next_subscription(struct full_subscription *sub) {
-  int sink = sub->sink;
-  short subid = sub->subid;
-
-  if (subid >= sinks[sink].maxsub) {
-    if (sink == SUBNET_MAX_SINKS-1) {
-      sub = NULL;
-      return;
-    }
-
-    sink++;
-    subid = 0;
-  } else {
-    subid++;
-  }
-
-  sub = &sinks[sink].subs[subid];
-}
-
 static enum existance sub_state(struct full_subscription *s) {
   if (s->sink == -1) {
     /* invalid (never started) subscription */
