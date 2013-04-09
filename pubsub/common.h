@@ -122,6 +122,15 @@ short pubsub_subscribe(struct subscription *s);
  * \param subid Subscription to remove
  */
 void pubsub_unsubscribe(short subid);
+
+/**
+ * \brief Returns this node's sink id
+ * \return this node's sink id or -1 if not known
+ *
+ * Note that this function will only return something sensible after the first
+ * subscription has been sent out!
+ */
+int pubsub_myid();
 /*---------------------------------------------------------------------------*/
 
 #endif /* __PUBSUB_H__ */

@@ -10,6 +10,9 @@
 #include "lib/pubsub/subscriber.h"
 
 /*---------------------------------------------------------------------------*/
+/* private functions */
+static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
+/*---------------------------------------------------------------------------*/
 /* private members */
 static struct pubsub_callbacks callbacks = {
   NULL,
@@ -20,12 +23,8 @@ static struct pubsub_callbacks callbacks = {
 };
 static void (*on_reading)(short subid, void *data);
 /*---------------------------------------------------------------------------*/
-/* private functions */
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
-/*---------------------------------------------------------------------------*/
 /* public function definitions */
 void subscriber_start(void (*cb)(short subid, void *data)) {
-  etarget = PROCESS_CURRENT();
   on_reading = cb;
   pubsub_init(&callbacks);
 }
@@ -42,7 +41,7 @@ void subscriber_unsubscribe(short subid) {
 }
 
 const struct subscription *subscriber_subscription(short subid) {
-  int mysinkid = subnet_myid();
+  int mysinkid = pubsub_myid();
   if (mysinkid == -1) {
     return NULL;
   }
@@ -57,7 +56,7 @@ const struct subscription *subscriber_subscription(short subid) {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
-  if (sink == subnet_myid() && on_reading != NULL) {
+  if (sink == pubsub_myid() && on_reading != NULL) {
     on_reading(subid, data);
   }
 }
