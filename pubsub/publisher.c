@@ -20,7 +20,7 @@ static void on_unsubscription(struct full_subscription *old);
 static void on_collect_timer_expired(void *tp);
 static void on_aggregate_timer_expired(void *sinkp);
 static void set_needs(enum reading_type t, bool need);
-static void aggregate_trigger(int sink);
+static void aggregate_trigger(int sink, bool added_data);
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct process *etarget;
@@ -92,6 +92,7 @@ bool publisher_needs(enum reading_type t) {
 }
 void publisher_publish(enum reading_type t, void *reading) {
   struct full_subscription *s = NULL;
+  bool added_data;
   set_needs(t, false);
 
   while (pubsub_next_subscription(&s)) {
@@ -104,13 +105,12 @@ void publisher_publish(enum reading_type t, void *reading) {
       if (soft_filter(s->in.soft_filter, t, reading, NULL)) {
         /* soft filtering means we don't send a value, but we still need to
          * publish the subscription so that other nodes may hear it */
-        pubsub_add_data(s->sink, s->subid, reading, 0);
+        added_data = pubsub_add_data(s->sink, s->subid, reading, 0);
       } else {
-        /* TODO: check return value */
-        pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
+        added_data = pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
       }
 
-      aggregate_trigger(s->sink);
+      aggregate_trigger(s->sink, added_data);
     }
   }
 }
@@ -150,17 +150,21 @@ static void on_unsubscription(struct full_subscription *old) {
 
   ctimer_set(&c, min, &on_collect_timer_expired, &s->in.sensor);
 }
-static void aggregate_trigger(int sink) {
+static void aggregate_trigger(int sink, bool added_data) {
+  /* if last add failed, we should send the packet straightaway */
+  /* TODO: send before full? */
+  if (!added_data) {
+    on_aggregate_timer_expired(&sink);
+  }
+
   if (ctimer_expired(&aggregate[sink])) {
     ctimer_restart(&aggregate[sink]);
   }
 }
 static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
   struct full_subscription *s = find_subscription(sink, subid);
-
-  /* TODO: check return value */
-  pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
-  aggregate_trigger(sink);
+  bool added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
+  aggregate_trigger(sink, added_data);
 }
 static void on_errpub(struct subnet_conn *c) {
   /* TODO */
