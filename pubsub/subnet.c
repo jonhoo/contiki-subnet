@@ -586,6 +586,7 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
 }
 
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
+  short subid = c->subid;
   struct queuebuf *q = queuebuf_new_from_packetbuf();
 
   packetbuf_clear();
@@ -595,7 +596,7 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
   packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
 
   struct fragment *f = packetbuf_dataptr();
-  f->subid = ++c->subid;
+  f->subid = subid;
   f->length = bytes;
   f++;
   memcpy(f, payload, bytes);
@@ -606,7 +607,9 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
 
   queuebuf_to_packetbuf(q);
   queuebuf_free(q);
-  return c->subid;
+
+  c->subid++;
+  return subid;
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, short subid) {
