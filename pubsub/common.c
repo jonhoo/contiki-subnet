@@ -104,6 +104,10 @@ void pubsub_publish(int sinkid) {
 short pubsub_subscribe(struct subscription *s) {
   return subnet_subscribe(&state.c, s, sizeof(struct subscription));
 }
+void pubsub_resubscribe(short subid) {
+  struct subscription *s = &find_subscription(pubsub_myid(), subid)->in;
+  return subnet_resubscribe(&state.c, subid, s, sizeof(struct subscription));
+}
 void pubsub_unsubscribe(short subid) {
   subnet_unsubscribe(&state.c, subid);
 }

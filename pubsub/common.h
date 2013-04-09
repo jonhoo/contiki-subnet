@@ -118,6 +118,12 @@ void pubsub_publish(int sinkid);
 short pubsub_subscribe(struct subscription *s);
 
 /**
+ * \brief Send out a subscription again
+ * \param subid Subscription to resend
+ */
+void pubsub_resubscribe(short subid);
+
+/**
  * \brief End the given subscription
  * \param subid Subscription to remove
  */
