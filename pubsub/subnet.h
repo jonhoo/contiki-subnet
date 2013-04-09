@@ -81,12 +81,19 @@ struct fragment {
 };
 
 /**
- * \brief Information about a single next hop
+ * \brief Information about a single neighbor
  */
 struct neighbor {
   rimeaddr_t addr;
-  short cost; /* advertised cost for this hop by next hop */
   unsigned long last_active; /* last time this next hop was heard from */
+};
+
+/**
+ * \brief Information about a single next hop
+ */
+struct sink_neighbor {
+  short cost; /* advertised cost for this hop by next hop */
+  struct neighbor *node;
 };
 
 /**
@@ -96,7 +103,7 @@ struct sink {
   rimeaddr_t sink;
   short advertised_cost; /* what cost we've advertised this route as */
   short numhops;
-  struct neighbor *nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
+  struct sink_neighbor nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 
   short fragments;
   size_t buflen;

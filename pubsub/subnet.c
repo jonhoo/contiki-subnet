@@ -266,9 +266,9 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   int i;
   int previ = -1;
   int nexti = -1;
-  struct neighbor *n = NULL;
-  struct neighbor *next;
-  struct neighbor *this;
+  struct sink_neighbor *n = NULL;
+  struct sink_neighbor *next;
+  struct sink_neighbor *this;
 
   if (route == NULL) {
     return NULL;
@@ -280,10 +280,10 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
 
   /* find neighbor pointer */
   if (prevto != NULL) {
-    for (i = 0; i < c->numneighbors; i++) {
-      if (rimeaddr_cmp(&c->neighbors[i].addr, prevto)) {
+    for (i = 0; i < route->numhops; i++) {
+      if (rimeaddr_cmp(&route->nexthops[i].node->addr, prevto)) {
         previ = i;
-        n = &c->neighbors[i];
+        n = &route->nexthops[i];
         break;
       }
     }
@@ -292,7 +292,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   /* find next most expensive route after n */
   next = n;
   for (i = 0; i < route->numhops; i++) {
-    this = route->nexthops[i];
+    this = &route->nexthops[i];
 
     /* previous hop can't be next hop */
     if (this == n) continue;
@@ -328,7 +328,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
     return NULL;
   }
 
-  return &n->addr;
+  return &n->node->addr;
 }
 
 static void broadcast(struct adisclose_conn *c) {
@@ -389,6 +389,8 @@ static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink) {
 
   c->u->sink_left(c, sinkid);
   s->revoked = clock_seconds();
+  s->numhops = 0;
+  s->advertised_cost = 0;
   notify_left(c, sink);
 }
 
@@ -398,14 +400,15 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   struct neighbor *n = NULL;
   struct sink *route = NULL;
   struct neighbor *oldest;
-  int oldesti;
+  struct sink_neighbor *replace;
+  short cost = packetbuf_attr(PACKETBUF_ATTR_HOPS);
+  int replacei;
 
   /* find neighbor pointer */
   oldest = n;
   for (i = 0; i < c->numneighbors; i++) {
     if (rimeaddr_cmp(&c->neighbors[i].addr, from)) {
       n = &c->neighbors[i];
-      break;
     }
 
     if (oldest == NULL || c->neighbors[i].last_active < oldest->last_active) {
@@ -425,8 +428,6 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
     }
 
     rimeaddr_copy(&n->addr, from);
-    /* TODO: n->cost will vary depending on which sink it's targeting */
-    n->cost = packetbuf_attr(PACKETBUF_ATTR_HOPS);
   }
 
   n->last_active = clock_seconds();
@@ -457,7 +458,7 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
       }
 
       rimeaddr_copy(&route->sink, sink);
-      route->advertised_cost = n->cost + 1;
+      route->advertised_cost = cost + 1;
       route->numhops = 0;
       route->buflen = 0;
       route->fragments = 0;
@@ -470,28 +471,30 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   }
 
   /* find cheapest and oldest next hop towards sink */
-  oldest = n;
   for (i = 0; i < route->numhops; i++) {
-    if (rimeaddr_cmp(&route->nexthops[i]->addr, from)) {
+    if (rimeaddr_cmp(&route->nexthops[i].node->addr, from)) {
+      route->nexthops[i].cost = cost;
       n = NULL;
     }
 
-    if (route->nexthops[i]->last_active < oldest->last_active) {
-      oldest = route->nexthops[i];
-      oldesti = i;
+    if (route->nexthops[i].node == oldest) {
+      replacei = i;
     }
   }
 
   /* if *from was not stored as a next hop for sink and it is indeed a *next*
    * hop, add it (or replace with oldest) */
-  if (n != NULL && n->cost <= route->advertised_cost) {
+  if (n != NULL && cost <= route->advertised_cost) {
     if (route->numhops < SUBNET_MAX_ALTERNATE_ROUTES) {
-      route->nexthops[route->numhops] = n;
+      replace = &route->nexthops[route->numhops];
       route->numhops++;
     /* } else if (oldest != n) { no need for this check since n is always new */
     } else {
-      route->nexthops[oldesti] = n;
+      replace = &route->nexthops[replacei];
     }
+
+    replace->node = n;
+    replace->cost = cost;
   }
 }
 
