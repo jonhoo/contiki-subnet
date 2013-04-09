@@ -42,13 +42,20 @@
 #endif
 
 /*---------------------------------------------------------------------------*/
+struct sfilter {
+  enum soft_filter filter;
+  union soft_arg   arg;
+};
+struct hfilter {
+  enum hard_filter filter;
+  union hard_arg   arg;
+};
 struct subscription {
   clock_time_t      interval;
-  enum soft_filter  soft_filter;
-  enum hard_filter  hard_filter;
+  struct sfilter    soft;
+  struct hfilter    hard;
   enum aggregator   aggregator;
   enum reading_type sensor;
-  /* TODO: Add params for soft/hard filter. Need for example for van location */
 };
 struct full_subscription {
   subid_t subid;

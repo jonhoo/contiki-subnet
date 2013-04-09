@@ -10,8 +10,16 @@ enum soft_filter  {
   SOFT_FILTER_1
 };
 
+union soft_arg {
+  double reading;
+};
+
 enum hard_filter {
   HARD_FILTER_1
+};
+
+union hard_arg {
+  double reading;
 };
 
 enum aggregator {

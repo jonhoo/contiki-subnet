@@ -42,13 +42,13 @@ static size_t rsize[PUBSUB_MAX_SENSORS];
 static bool needs[PUBSUB_MAX_SENSORS];
 static int numneeds;
 
-static bool (* soft_filter)(enum soft_filter f, enum reading_type t, void *data, void *arg);
-static bool (* hard_filter)(enum hard_filter f, enum reading_type t, void *data, void *arg);
+static bool (* soft_filter)(struct sfilter *f, enum reading_type t, void *data);
+static bool (* hard_filter)(struct hfilter *f, enum reading_type t, void *data);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start(
-  bool (* soft_filter_proxy)(enum soft_filter f, enum reading_type t, void *data, void *arg),
-  bool (* hard_filter_proxy)(enum hard_filter f, enum reading_type t, void *data, void *arg)
+  bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
+  bool (* hard_filter_proxy)(struct hfilter *f, enum reading_type t, void *data)
 ) {
   clock_time_t max = ~0;
   int i;
@@ -98,11 +98,11 @@ void publisher_publish(enum reading_type t, void *reading) {
   while (pubsub_next_subscription(&s)) {
     if (s->in.sensor == t) {
       /* don't add data if it doesn't pass the hard filter */
-      if (hard_filter(s->in.hard_filter, t, reading, NULL)) {
+      if (hard_filter(&s->in.hard, t, reading)) {
         continue;
       }
 
-      if (soft_filter(s->in.soft_filter, t, reading, NULL)) {
+      if (soft_filter(&s->in.soft, t, reading)) {
         /* soft filtering means we don't send a value, but we still need to
          * publish the subscription so that other nodes may hear it */
         added_data = pubsub_add_data(s->sink, s->subid, reading, 0);

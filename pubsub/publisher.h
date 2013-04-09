@@ -30,8 +30,8 @@
  *          NULL pointer if the node doesn't have the given sensor
  */
 void publisher_start(
-  bool (* soft_filter_proxy)(enum soft_filter f, enum reading_type t, void *data, void *arg),
-  bool (* hard_filter_proxy)(enum hard_filter f, enum reading_type t, void *data, void *arg)
+  bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
+  bool (* hard_filter_proxy)(struct hfilter *f, enum reading_type t, void *data)
 );
 
 /**
