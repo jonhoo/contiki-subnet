@@ -9,123 +9,125 @@
  */
 
 #include "lib/pubsub/common.h"
-/*---------------------------------------------------------------------------*/
-/* private members */
-static struct full_subscription *subscriptions;
-static int numsubscriptions;
-static struct pubsub_state *state;
+#include <string.h>
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
-static void on_unsubscribe(struct subnet_conn *c, int sink, short subid)
-static bool on_exists(struct subnet_conn *c, int sink, short subid);
+static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
+static enum existance on_exists(struct subnet_conn *c, int sink, short subid);
 static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target);
+/*---------------------------------------------------------------------------*/
+/* private members */
+static struct full_subscription subscriptions[SUBNET_MAX_SINKS][PUBSUB_MAX_SUBSCRIPTIONS];
+static struct pubsub_state state;
+static struct subnet_callbacks su = {
+  NULL,
+  NULL,
+  NULL,
+  on_subscribe,
+  on_unsubscribe,
+  on_exists,
+  on_inform
+};
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 struct full_subscription * find_subscription(int sink, short subid) {
-  struct full_subscription *s;
-  for (int i = 0; i < numsubscriptions; i++) {
-    s = &subscriptions[i];
-    if (s->subid != subid) {
-      continue;
-    }
-    if (s->sink == sink) {
-      return s;
-    }
-  }
-
-  return NULL;
+  return &subscriptions[sink][subid];
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
-  static struct full_subscription[PUBSUB_MAX_SUBSCRIPTIONS] ss;
-  static struct pubsub_state s;
-  static struct subnet_callbacks u = {
-    u->on_errpub,
-    u->on_ondata,
-    u->on_onsent,
-    on_subscribe,
-    on_unsubscribe,
-    on_exists,
-    on_inform
-  };
+  /* pass-thru callbacks */
+  su.errpub = u->on_errpub;
+  su.ondata = u->on_ondata;
+  su.onsent = u->on_onsent;
 
-  subscriptions = &ss;
-  state = &s;
+  /* all subscriptions are unknown/invalid initially */
+  for (int i = 0; i < SUBNET_MAX_SINKS; i++) {
+    for (int j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
+      subscriptions[i][j].sink = -1;
+    }
+  }
 
-  subnet_open(&state->c, 14159, 26535, &u);
+  /* store callbacks */
+  state.u = u;
+
+  /* and start subnet networking */
+  subnet_open(&state.c, 14159, 26535, &su);
 }
 
 int pubsub_get_subscriptions(struct full_subscription **ss) {
-  *s = subscriptions;
-  return numsubscriptions;
+  /* TODO: fix this */
+  return 0;
 }
 
 bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
-  return subnet_add_data(s->c, sinkid, subid, payload, bytes);
+  return subnet_add_data(&state.c, sinkid, subid, payload, bytes);
 }
 void pubsub_publish(int sinkid) {
-  subnet_publish(s->c, sinkid);
+  subnet_publish(&state.c, sinkid);
 }
 short pubsub_subscribe(struct subscription *s) {
-  short subid = subnet_subscribe(s->c, s, sizeof(struct subscription));
+  return subnet_subscribe(&state.c, s, sizeof(struct subscription));
 }
 void pubsub_unsubscribe(short subid) {
-  subnet_unsubscribe(s->c, subid);
+  subnet_unsubscribe(&state.c, subid);
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data) {
-  if (numsubscriptions == PUBSUB_MAX_SUBSCRIPTIONS) {
-    PRINTF("Subscription buffer full!");
-    return;
-  }
-
-  struct full_subscription *s = &subscriptions[numsubscriptions];
+  struct full_subscription *s = find_subscription(sink, subid);
   s->subid = subid;
   s->sink = sink;
+  s->revoked = 0;
   memcpy(&s->in, data, sizeof(struct subscription));
-  numsubscriptions++;
 
-  if (c->u->on_subscription != NULL) {
-    c->u->on_subscription(s);
+  if (state.u->on_subscription != NULL) {
+    state.u->on_subscription(s);
   }
 }
 
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
   struct full_subscription *remove = find_subscription(sink, subid);
-  if (remove == NULL) {
-    return;
-  }
+  if (remove->revoked == 0) {
+    remove->revoked = clock_seconds();
 
-  if (c->u->on_unsubscription != NULL) {
-    c->u->on_unsubscription(remove);
+    if (state.u->on_unsubscription != NULL) {
+      state.u->on_unsubscription(remove);
+    }
   }
-
-  if (numsubscriptions > 1) {
-    struct full_subscription *last = &subscriptions[numsubscriptions-1];
-    memcpy(remove, last, sizeof(struct full_subscription));
-  }
-  numsubscriptions--;
 }
 
-static bool on_exists(struct subnet_conn *c, int sink, short subid) {
-  /* TODO: optimize */
-  return find_subscription(sink, subid) != NULL;
+static enum existance on_exists(struct subnet_conn *c, int sink, short subid) {
+  struct full_subscription *s = find_subscription(sink, subid);
+  if (s->sink == -1) {
+    /* invalid (never started) subscription */
+    return UNKNOWN;
+  }
+
+  if (s->revoked == 0) {
+    /* known, non-revoked subscription */
+    return KNOWN;
+  }
+
+  if (clock_seconds() - s->revoked < 600) {
+    /* known, revoked, but not expired subscription */
+    /* TODO: This should be adjustable */
+    return REVOKED;
+  }
+
+  /* known, revoked and expired subscription */
+  return UNKNOWN;
 }
 
 static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target) {
   struct full_subscription *s = find_subscription(sink, subid);
-  if (s == NULL) {
-    return 0;
-  }
 
   /* TODO: Verify that PACKETBUF_SIZE is the right value to use here */
   if (packetbuf_datalen() + sizeof(struct subscription) > PACKETBUF_SIZE) {
     return 0;
   }
 
-  memcpy(target, s->in, sizeof(struct subscription));
+  memcpy(target, &s->in, sizeof(struct subscription));
   return sizeof(struct subscription);
 }
 /*---------------------------------------------------------------------------*/

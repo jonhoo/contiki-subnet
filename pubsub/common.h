@@ -32,7 +32,7 @@
 #ifdef PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #define PUBSUB_MAX_SUBSCRIPTIONS PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #else
-#define PUBSUB_MAX_SUBSCRIPTIONS 128
+#define PUBSUB_MAX_SUBSCRIPTIONS 32
 #endif
 /*---------------------------------------------------------------------------*/
 struct subscription {
@@ -46,6 +46,7 @@ struct subscription {
 struct full_subscription {
   short subid;
   int sink;
+  clock_time_t revoked;
   struct subscription in;
 };
 struct pubsub_state {
