@@ -669,7 +669,10 @@ void subnet_unsubscribe(struct subnet_conn *c, short subid) {
 }
 
 int subnet_myid(struct subnet_conn *c) {
-  /* TODO: optimize */
-  return find_sinkid(c, &rimeaddr_node_addr);
+  static int myid = -1;
+  if (myid == -1) {
+    myid = find_sinkid(c, &rimeaddr_node_addr);
+  }
+  return myid;
 }
 /** @} */
