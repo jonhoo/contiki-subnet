@@ -12,9 +12,9 @@
 
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static void on_errpub(struct subnet_conn *c);
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
-static void on_onsent(struct subnet_conn *c, int sink, short subid);
+static void on_errpub();
+static void on_ondata(int sink, short subid, void *data);
+static void on_onsent(int sink, short subid);
 static void on_subscription(struct full_subscription *s);
 static void on_unsubscription(struct full_subscription *old);
 static void on_collect_timer_expired(void *tp);
@@ -161,15 +161,15 @@ static void aggregate_trigger(int sink, bool added_data) {
     ctimer_restart(&aggregate[sink]);
   }
 }
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
+static void on_ondata(int sink, short subid, void *data) {
   struct full_subscription *s = find_subscription(sink, subid);
   bool added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
   aggregate_trigger(sink, added_data);
 }
-static void on_errpub(struct subnet_conn *c) {
+static void on_errpub() {
   /* TODO */
 }
-static void on_onsent(struct subnet_conn *c, int sink, short subid) {
+static void on_onsent(int sink, short subid) {
   /* TODO */
 }
 static void set_needs(enum reading_type t, bool need) {

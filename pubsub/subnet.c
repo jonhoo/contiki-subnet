@@ -593,7 +593,6 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
       c->u->errpub(c);
     }
     return;
-    /* TODO: let upstream know whether we failed because no next hop or busy */
   }
 
   /* preserve existing packetbuf */

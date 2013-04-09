@@ -15,6 +15,9 @@
 static enum existance sub_state(struct full_subscription *s);
 static bool is_active(struct full_subscription *s);
 
+static void on_errpub(struct subnet_conn *c);
+static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
+static void on_onsent(struct subnet_conn *c, int sink, short subid);
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
 static enum existance on_exists(struct subnet_conn *c, int sink, short subid);
@@ -28,9 +31,9 @@ struct sink_subscriptions {
 static struct sink_subscriptions sinks[SUBNET_MAX_SINKS];
 static struct pubsub_state state;
 static struct subnet_callbacks su = {
-  NULL,
-  NULL,
-  NULL,
+  on_errpub,
+  on_ondata,
+  on_onsent,
   on_subscribe,
   on_unsubscribe,
   on_exists,
@@ -43,11 +46,6 @@ struct full_subscription * find_subscription(int sink, short subid) {
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
-  /* pass-thru callbacks */
-  su.errpub = u->on_errpub;
-  su.ondata = u->on_ondata;
-  su.onsent = u->on_onsent;
-
   /* all subscriptions are unknown/invalid initially */
   for (int i = 0; i < SUBNET_MAX_SINKS; i++) {
     sinks[i].maxsub = 0;
@@ -116,6 +114,24 @@ int pubsub_myid() {
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
+static void on_errpub(struct subnet_conn *c) {
+  if (state.u->on_errpub != NULL) {
+    state.u->on_errpub();
+  }
+}
+
+static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
+  if (state.u->on_ondata != NULL) {
+    state.u->on_ondata(sink, subid, data);
+  }
+}
+
+static void on_onsent(struct subnet_conn *c, int sink, short subid) {
+  if (state.u->on_onsent != NULL) {
+    state.u->on_onsent(sink, subid);
+  }
+}
+
 static enum existance sub_state(struct full_subscription *s) {
   if (s->sink == -1) {
     /* invalid (never started) subscription */
@@ -183,7 +199,6 @@ static enum existance on_exists(struct subnet_conn *c, int sink, short subid) {
 static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target) {
   struct full_subscription *s = find_subscription(sink, subid);
 
-  /* TODO: Verify that PACKETBUF_SIZE is the right value to use here */
   if (packetbuf_datalen() + sizeof(struct subscription) > PACKETBUF_SIZE) {
     return 0;
   }

@@ -11,7 +11,7 @@
 
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
+static void on_ondata(int sink, short subid, void *data);
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct pubsub_callbacks callbacks = {
@@ -22,23 +22,24 @@ static struct pubsub_callbacks callbacks = {
   NULL
 };
 static void (*on_reading)(short subid, void *data);
-static ctimer resubscribe[PUBSUB_MAX_SUBSCRIPTIONS];
+static struct ctimer resubscribe[PUBSUB_MAX_SUBSCRIPTIONS];
 static short is[PUBSUB_MAX_SUBSCRIPTIONS];
+static void on_resubscribe(void *subidp);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void subscriber_start(void (*cb)(short subid, void *data)) {
   on_reading = cb;
   pubsub_init(&callbacks);
 
-  for (i = 0; i < PUBSUB_MAX_SUBSCRIPTIONS; i++) {
+  for (int i = 0; i < PUBSUB_MAX_SUBSCRIPTIONS; i++) {
     is[i] = i;
   }
 }
 
 short subscriber_subscribe(struct subscription *s) {
   short subid = pubsub_subscribe(s);
-
   ctimer_set(&resubscribe[subid], PUBSUB_RESEND_INTERVAL, &on_resubscribe, &is[subid]);
+  return subid;
 }
 short subscriber_replace(short subid, struct subscription *s) {
   subscriber_unsubscribe(subid);
@@ -67,8 +68,9 @@ const struct subscription *subscriber_subscription(short subid) {
 static void on_resubscribe(void *subidp) {
   int subid = *((int *)subidp);
   pubsub_resubscribe(subid);
+  ctimer_restart(&resubscribe[subid]);
 }
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
+static void on_ondata(int sink, short subid, void *data) {
   if (sink == pubsub_myid() && on_reading != NULL) {
     on_reading(subid, data);
   }

@@ -61,16 +61,14 @@ struct pubsub_state {
   struct pubsub_callbacks *u;
 };
 struct pubsub_callbacks {
-  /* TODO: Avoid struct subnet_conn parameter in these */
-
   /* Function to call if a publish couldn't be sent */
-  void (* on_errpub)(struct subnet_conn *c);
+  void (* on_errpub)();
 
   /* Function to call when a publish is received */
-  void (* on_ondata)(struct subnet_conn *c, int sink, short subid, void *data);
+  void (* on_ondata)(int sink, short subid, void *data);
 
   /* Function to call when a publish was sent successfully */
-  void (* on_onsent)(struct subnet_conn *c, int sink, short subid);
+  void (* on_onsent)(int sink, short subid);
 
   /* Function to call when a new subscription was found */
   void (* on_subscription)(struct full_subscription *s);

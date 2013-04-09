@@ -182,8 +182,6 @@ void subnet_publish(struct subnet_conn *c, int sinkid);
  * \param payload Where to read the subscription data from
  * \param bytes Size of the subscription data
  * \return The subscription id of the new subscription
- *
- * TODO: Allow multiple subscriptions in a single send?
  */
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
 
