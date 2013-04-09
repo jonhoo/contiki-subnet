@@ -16,16 +16,16 @@ static enum existance sub_state(struct full_subscription *s);
 static bool is_active(struct full_subscription *s);
 
 static void on_errpub(struct subnet_conn *c);
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data);
-static void on_onsent(struct subnet_conn *c, int sink, short subid);
-static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
-static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
-static enum existance on_exists(struct subnet_conn *c, int sink, short subid);
-static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target);
+static void on_ondata(struct subnet_conn *c, int sink, subid_t subid, void *data);
+static void on_onsent(struct subnet_conn *c, int sink, subid_t subid);
+static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data);
+static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid);
+static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid);
+static size_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target);
 /*---------------------------------------------------------------------------*/
 /* private members */
 struct sink_subscriptions {
-  short maxsub;
+  subid_t maxsub;
   struct full_subscription subs[PUBSUB_MAX_SUBSCRIPTIONS];
 };
 static struct sink_subscriptions sinks[SUBNET_MAX_SINKS];
@@ -41,7 +41,7 @@ static struct subnet_callbacks su = {
 };
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
-struct full_subscription * find_subscription(int sink, short subid) {
+struct full_subscription * find_subscription(int sink, subid_t subid) {
   return &sinks[sink].subs[subid];
 }
 
@@ -63,7 +63,7 @@ void pubsub_init(struct pubsub_callbacks *u) {
 
 bool pubsub_next_subscription(struct full_subscription **sub) {
   int sink;
-  short subid;
+  subid_t subid;
 
   /* find next active subscription or the end */
   do {
@@ -93,20 +93,20 @@ bool pubsub_next_subscription(struct full_subscription **sub) {
   return true;
 }
 
-bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
+bool pubsub_add_data(int sinkid, subid_t subid, void *payload, size_t bytes) {
   return subnet_add_data(&state.c, sinkid, subid, payload, bytes);
 }
 void pubsub_publish(int sinkid) {
   subnet_publish(&state.c, sinkid);
 }
-short pubsub_subscribe(struct subscription *s) {
+subid_t pubsub_subscribe(struct subscription *s) {
   return subnet_subscribe(&state.c, s, sizeof(struct subscription));
 }
-void pubsub_resubscribe(short subid) {
+void pubsub_resubscribe(subid_t subid) {
   struct subscription *s = &find_subscription(pubsub_myid(), subid)->in;
   return subnet_resubscribe(&state.c, subid, s, sizeof(struct subscription));
 }
-void pubsub_unsubscribe(short subid) {
+void pubsub_unsubscribe(subid_t subid) {
   subnet_unsubscribe(&state.c, subid);
 }
 int pubsub_myid() {
@@ -120,13 +120,13 @@ static void on_errpub(struct subnet_conn *c) {
   }
 }
 
-static void on_ondata(struct subnet_conn *c, int sink, short subid, void *data) {
+static void on_ondata(struct subnet_conn *c, int sink, subid_t subid, void *data) {
   if (state.u->on_ondata != NULL) {
     state.u->on_ondata(sink, subid, data);
   }
 }
 
-static void on_onsent(struct subnet_conn *c, int sink, short subid) {
+static void on_onsent(struct subnet_conn *c, int sink, subid_t subid) {
   if (state.u->on_onsent != NULL) {
     state.u->on_onsent(sink, subid);
   }
@@ -159,7 +159,7 @@ static bool is_active(struct full_subscription *s) {
   return sub_state(s) == KNOWN;
 }
 
-static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data) {
+static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data) {
   struct full_subscription *s = find_subscription(sink, subid);
   s->subid = subid;
   s->sink = sink;
@@ -175,7 +175,7 @@ static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *dat
   }
 }
 
-static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
+static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid) {
   struct full_subscription *remove = find_subscription(sink, subid);
   if (remove->revoked == 0) {
     if (sinks[sink].maxsub == subid) {
@@ -191,12 +191,12 @@ static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
   }
 }
 
-static enum existance on_exists(struct subnet_conn *c, int sink, short subid) {
+static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid) {
   struct full_subscription *s = find_subscription(sink, subid);
   return sub_state(s);
 }
 
-static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target) {
+static size_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target) {
   struct full_subscription *s = find_subscription(sink, subid);
 
   if (packetbuf_datalen() + sizeof(struct subscription) > PACKETBUF_SIZE) {

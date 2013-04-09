@@ -32,7 +32,7 @@ static const struct packetbuf_attrlist attributes[] = {
 #define EACH_FRAGMENT(FRAGMENTS, BUF, BLOCK) \
   { \
     int fragi;                                                   \
-    short subid;                                                 \
+    subid_t subid;                                               \
     short fragments = FRAGMENTS;                                 \
     struct fragment *frag = (struct fragment *) BUF;             \
     void *payload;                                               \
@@ -167,8 +167,8 @@ static void broadcast(struct adisclose_conn *c) {
  * This function should only be called as many times as there are fragments in
  * the packet.
  */
-static short next_fragment(struct fragment **raw, void **payload) {
-  short subid = (*raw)->subid;
+static subid_t next_fragment(struct fragment **raw, void **payload) {
+  subid_t subid = (*raw)->subid;
   size_t length = (*raw)->length;
   /* move past subid + length */
   *raw = *raw + 1;
@@ -180,7 +180,7 @@ static short next_fragment(struct fragment **raw, void **payload) {
 }
 
 /* because REVOKED subscriptions are still known */
-static bool is_known(struct subnet_conn *c, int sinkid, short subid) {
+static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid) {
   enum existance e = c->u->exists(c, sinkid, subid);
   return e == UNKNOWN ? false : true;
 }
@@ -330,9 +330,8 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     {
       int sinkid = find_sinkid(c, sink);
       struct peer_packet *p = packetbuf_dataptr();
-      short *revoked = (short *)(p+1);
-      short unkown[p->unknown];
-      short *unknown = revoked + p->revoked;
+      subid_t *revoked = (subid_t *)(p+1);
+      subid_t unknown[p->unknown];
       short fragments = 0;
       struct fragment *frag;
       int i;
@@ -442,8 +441,8 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
       struct queuebuf *q;
       struct peer_packet p = { 0, 0 };
 
-      short revoked[fragments];
-      short unknown[fragments];
+      subid_t revoked[fragments];
+      subid_t unknown[fragments];
 
       int sinkid = find_sinkid(c, sink);
       EACH_PACKET_FRAGMENT(
@@ -469,12 +468,12 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
       packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
 
       /* write revoked */
-      memcpy(packetbuf_dataptr() + packetbuf_datalen(), revoked, p.revoked * sizeof(short));
-      packetbuf_set_datalen(packetbuf_datalen() + p.revoked * sizeof(short));
+      memcpy(packetbuf_dataptr() + packetbuf_datalen(), revoked, p.revoked * sizeof(subid_t));
+      packetbuf_set_datalen(packetbuf_datalen() + p.revoked * sizeof(subid_t));
 
       /* write unknown */
-      memcpy(packetbuf_dataptr() + packetbuf_datalen(), unknown, p.unknown * sizeof(short));
-      packetbuf_set_datalen(packetbuf_datalen() + p.unknown * sizeof(short));
+      memcpy(packetbuf_dataptr() + packetbuf_datalen(), unknown, p.unknown * sizeof(subid_t));
+      packetbuf_set_datalen(packetbuf_datalen() + p.unknown * sizeof(subid_t));
 
       /* send and restore */
       adisclose_send(&c->peer, from);
@@ -558,7 +557,7 @@ void subnet_close(struct subnet_conn *c) {
   adisclose_close(&c->peer);
 }
 
-bool subnet_add_data(struct subnet_conn *c, int sinkid, short subid, void *payload, size_t bytes) {
+bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
   if (sinkid >= c->numsinks) {
     return false;
   }
@@ -613,14 +612,14 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
   queuebuf_free(q);
 }
 
-short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
-  short subid = c->subid;
+subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
+  subid_t subid = c->subid;
   subnet_resubscribe(c, subid, payload, bytes);
   c->subid++;
   return subid;
 }
 
-void subnet_resubscribe(struct subnet_conn *c, short subid, void *payload, size_t bytes) {
+void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes) {
   struct queuebuf *q = queuebuf_new_from_packetbuf();
 
   packetbuf_clear();
@@ -647,7 +646,7 @@ void subnet_resubscribe(struct subnet_conn *c, short subid, void *payload, size_
   queuebuf_free(q);
 }
 
-void subnet_unsubscribe(struct subnet_conn *c, short subid) {
+void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
   struct queuebuf *q = queuebuf_new_from_packetbuf();
 
   packetbuf_clear();

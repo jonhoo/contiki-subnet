@@ -52,10 +52,12 @@
                            { PACKETBUF_ATTR_HOPS,         4*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
+
+typedef uint8_t subid_t;
 /*---------------------------------------------------------------------------*/
 /* private structs */
 struct fragment {
-  short subid;
+  subid_t subid;
   size_t length;
 };
 
@@ -90,7 +92,7 @@ struct subnet_conn {
   struct adisclose_conn pubsub;     /* connection for pub/sub messages */
   struct adisclose_conn peer;       /* connection for P2P subscription info */
   const struct subnet_callbacks *u; /* callbacks */
-  short subid;                      /* last sent subscription id */
+  subid_t subid;                        /* last sent subscription id */
 
   short numsinks;                   /* number of routes (i.e. sinks) known */
   struct sink sinks[SUBNET_MAX_SINKS];
@@ -116,27 +118,27 @@ struct subnet_callbacks {
 
   /* called when a publish is received. Note that data MUST be copied if it is
    * to be reused later as the memory WILL be reclaimed. */
-  void (* ondata)(struct subnet_conn *c, int sinkid, short subid, void *data);
+  void (* ondata)(struct subnet_conn *c, int sinkid, subid_t subid, void *data);
 
   /* called when a publish was sent successfully */
-  void (* onsent)(struct subnet_conn *c, int sinkid, short subid);
+  void (* onsent)(struct subnet_conn *c, int sinkid, subid_t subid);
 
   /* called when a new subscription is in packetbuf. Note that data MUST be
    * copied if it is to be reused later as the memory WILL be reclaimed */
-  void (* subscribe)(struct subnet_conn *c, int sinkid, short subid, void *data);
+  void (* subscribe)(struct subnet_conn *c, int sinkid, subid_t subid, void *data);
 
   /* called when a subscription is cancelled */
-  void (* unsubscribe)(struct subnet_conn *c, int sinkid, short subid);
+  void (* unsubscribe)(struct subnet_conn *c, int sinkid, subid_t subid);
 
   /* should return true if the given subscription is known. Note that this
    * function may be called quite frequently, so it may be well worth to
    * optimize */
-  enum existance (* exists)(struct subnet_conn *c, int sinkid, short subid);
+  enum existance (* exists)(struct subnet_conn *c, int sinkid, subid_t subid);
 
   /* should fill target with information about the given subscription and return
    * the number of bytes written. It is up to this function to make sure the
    * packet is not overfilled (by checking packetbuf_totlen()) */
-  size_t (* inform)(struct subnet_conn *c, int sinkid, short subid, void *target);
+  size_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target);
 };
 /*---------------------------------------------------------------------------*/
 /* public functions */
@@ -167,7 +169,7 @@ void subnet_close(struct subnet_conn *c);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool subnet_add_data(struct subnet_conn *c, int sinkid, short subid, void *payload, size_t bytes);
+bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes);
 
 /**
  * \brief Send publishe data packet
@@ -183,7 +185,7 @@ void subnet_publish(struct subnet_conn *c, int sinkid);
  * \param bytes Size of the subscription data
  * \return The subscription id of the new subscription
  */
-short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
+subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
 
 /**
  * \brief Send out a new subscription
@@ -192,14 +194,14 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
  * \param payload Where to read the subscription data from
  * \param bytes Size of the subscription data
  */
-void subnet_resubscribe(struct subnet_conn *c, short subid, void *payload, size_t bytes);
+void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes);
 
 /**
  * \brief End the given subscription
  * \param c Connection state
  * \param subid Subscription to remove
  */
-void subnet_unsubscribe(struct subnet_conn *c, short subid);
+void subnet_unsubscribe(struct subnet_conn *c, subid_t subid);
 
 /**
  * \brief Returns this node's sink id

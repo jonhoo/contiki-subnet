@@ -51,7 +51,7 @@ struct subscription {
   /* TODO: Add params for soft/hard filter. Need for example for van location */
 };
 struct full_subscription {
-  short subid;
+  subid_t subid;
   int sink;
   clock_time_t revoked;
   struct subscription in;
@@ -65,10 +65,10 @@ struct pubsub_callbacks {
   void (* on_errpub)();
 
   /* Function to call when a publish is received */
-  void (* on_ondata)(int sink, short subid, void *data);
+  void (* on_ondata)(int sink, subid_t subid, void *data);
 
   /* Function to call when a publish was sent successfully */
-  void (* on_onsent)(int sink, short subid);
+  void (* on_onsent)(int sink, subid_t subid);
 
   /* Function to call when a new subscription was found */
   void (* on_subscription)(struct full_subscription *s);
@@ -90,7 +90,7 @@ void pubsub_init(struct pubsub_callbacks *u);
  * \param subid The subscription's ID
  * \return The found subscription or NULL if the subscription is unknown
  */
-struct full_subscription * find_subscription(int sink, short subid);
+struct full_subscription * find_subscription(int sink, subid_t subid);
 
 /**
  * \brief Make the given pointer point to the next subscription
@@ -107,7 +107,7 @@ bool pubsub_next_subscription(struct full_subscription **prev);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes);
+bool pubsub_add_data(int sinkid, subid_t subid, void *payload, size_t bytes);
 
 /**
  * \brief Send publishe data packet
@@ -120,19 +120,19 @@ void pubsub_publish(int sinkid);
  * \param s Subscription to add
  * \return The subscription id of the new subscription
  */
-short pubsub_subscribe(struct subscription *s);
+subid_t pubsub_subscribe(struct subscription *s);
 
 /**
  * \brief Send out a subscription again
  * \param subid Subscription to resend
  */
-void pubsub_resubscribe(short subid);
+void pubsub_resubscribe(subid_t subid);
 
 /**
  * \brief End the given subscription
  * \param subid Subscription to remove
  */
-void pubsub_unsubscribe(short subid);
+void pubsub_unsubscribe(subid_t subid);
 
 /**
  * \brief Returns this node's sink id
