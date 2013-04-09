@@ -22,8 +22,17 @@
 
 /**
  * \brief Starts the pubsub network connection
+ * \param soft_filter_proxy Function to use as a soft filter proxy. Should
+ *          return true if the value should be filtered. Note that data may be a
+ *          NULL pointer if the node doesn't have the given sensor
+ * \param hard_filter_proxy Function to use as a hard filter proxy. Should
+ *          return true if the value should be filtered. Note that data may be a
+ *          NULL pointer if the node doesn't have the given sensor
  */
-void publisher_start();
+void publisher_start(
+  bool (* soft_filter_proxy)(enum soft_filter f, enum reading_type t, void *data, void *arg),
+  bool (* hard_filter_proxy)(enum hard_filter f, enum reading_type t, void *data, void *arg)
+);
 
 /**
  * \brief Indicates that this node can produce readings of the given type

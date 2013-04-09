@@ -41,11 +41,20 @@ static size_t rsize[PUBSUB_MAX_SENSORS];
 
 static bool needs[PUBSUB_MAX_SENSORS];
 static int numneeds;
+
+static bool (* soft_filter)(enum soft_filter f, enum reading_type t, void *data, void *arg);
+static bool (* hard_filter)(enum hard_filter f, enum reading_type t, void *data, void *arg);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
-void publisher_start() {
+void publisher_start(
+  bool (* soft_filter_proxy)(enum soft_filter f, enum reading_type t, void *data, void *arg),
+  bool (* hard_filter_proxy)(enum hard_filter f, enum reading_type t, void *data, void *arg)
+) {
   clock_time_t max = ~0;
   int i;
+
+  soft_filter = soft_filter_proxy;
+  hard_filter = hard_filter_proxy;
 
   etarget = PROCESS_CURRENT();
   pubsub_init(&callbacks);
@@ -83,14 +92,23 @@ bool publisher_needs(enum reading_type t) {
 }
 void publisher_publish(enum reading_type t, void *reading) {
   struct full_subscription *s = NULL;
-
-  /* TODO: soft and hard filtering */
   set_needs(t, false);
 
   while (pubsub_next_subscription(&s)) {
     if (s->in.sensor == t) {
-      /* TODO: check return value */
-      pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
+      /* don't add data if it doesn't pass the hard filter */
+      if (hard_filter(s->in.hard_filter, t, reading, NULL)) {
+        continue;
+      }
+
+      if (soft_filter(s->in.soft_filter, t, reading, NULL)) {
+        /* soft filtering means we don't send a value, but we still need to
+         * publish the subscription so that other nodes may hear it */
+        pubsub_add_data(s->sink, s->subid, reading, 0);
+      } else {
+        /* TODO: check return value */
+        pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
+      }
 
       aggregate_trigger(s->sink);
     }
@@ -163,7 +181,6 @@ static void on_collect_timer_expired(void *tp) {
   enum reading_type t = *((enum reading_type *)tp);
   if (rsize[t] == 0) {
     /* node doesn't have this sensor */
-    /* TODO: take hard filtering into account here? */
     publisher_publish(t, NULL);
   } else {
     set_needs(t, true);
