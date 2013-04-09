@@ -34,6 +34,13 @@
 #else
 #define PUBSUB_MAX_SUBSCRIPTIONS 32
 #endif
+
+#ifdef PUBSUB_CONF_REVOKE_PERIOD
+#define PUBSUB_REVOKE_PERIOD PUBSUB_CONF_REVOKE_PERIOD
+#else
+#define PUBSUB_REVOKE_PERIOD 600
+#endif
+
 /*---------------------------------------------------------------------------*/
 struct subscription {
   clock_time_t      interval;

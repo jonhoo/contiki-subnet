@@ -38,8 +38,7 @@ void subscriber_start(void (*cb)(short subid, void *data)) {
 short subscriber_subscribe(struct subscription *s) {
   short subid = pubsub_subscribe(s);
 
-  /* TODO: make adjustable */
-  ctimer_set(&resubscribe[subid], 30, &on_resubscribe, &is[subid]);
+  ctimer_set(&resubscribe[subid], PUBSUB_RESEND_INTERVAL, &on_resubscribe, &is[subid]);
 }
 short subscriber_replace(short subid, struct subscription *s) {
   subscriber_unsubscribe(subid);

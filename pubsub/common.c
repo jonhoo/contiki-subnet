@@ -127,9 +127,8 @@ static enum existance sub_state(struct full_subscription *s) {
     return KNOWN;
   }
 
-  if (clock_seconds() - s->revoked < 600) {
+  if (clock_seconds() - s->revoked < PUBSUB_REVOKE_PERIOD) {
     /* known, revoked, but not expired subscription */
-    /* TODO: This should be adjustable */
     return REVOKED;
   }
 

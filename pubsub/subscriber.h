@@ -13,6 +13,12 @@
 #ifndef __PUBSUB_SUB_H__
 #define __PUBSUB_SUB_H__
 #include "lib/pubsub/common.h"
+
+#ifdef PUBSUB_CONF_RESEND_INTERVAL
+#define PUBSUB_RESEND_INTERVAL PUBSUB_CONF_RESEND_INTERVAL
+#else
+#define PUBSUB_RESEND_INTERVAL 30
+#endif
 /*---------------------------------------------------------------------------*/
 /**
  * \brief Starts the pubsub network connection
