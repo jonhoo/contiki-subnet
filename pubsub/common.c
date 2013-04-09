@@ -12,6 +12,9 @@
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 /* private functions */
+static enum existance sub_state(struct full_subscription *s);
+static bool is_active(struct full_subscription *s);
+
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, int sink, short subid);
 static enum existance on_exists(struct subnet_conn *c, int sink, short subid);
@@ -19,6 +22,7 @@ static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *targ
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct full_subscription subscriptions[SUBNET_MAX_SINKS][PUBSUB_MAX_SUBSCRIPTIONS];
+static struct full_subscription *past = &subscriptions[SUBNET_MAX_SINKS-1][PUBSUB_MAX_SUBSCRIPTIONS-1]+1;
 static struct pubsub_state state;
 static struct subnet_callbacks su = {
   NULL,
@@ -55,9 +59,22 @@ void pubsub_init(struct pubsub_callbacks *u) {
   subnet_open(&state.c, 14159, 26535, &su);
 }
 
-int pubsub_get_subscriptions(struct full_subscription **ss) {
-  /* TODO: fix this */
-  return 0;
+bool pubsub_next_subscription(struct full_subscription *sub) {
+  if (sub == NULL) {
+    /* no previous, start from beginning */
+    sub = &subscriptions[0][0];
+  } else {
+    /* otherwise, move on */
+    sub++;
+  }
+
+  /* find next active subscription or the end */
+  while (sub != past && !is_active(sub)) {
+    sub++;
+  }
+
+  /* if we didn't reach the end, we have a next! */
+  return sub != past;
 }
 
 bool pubsub_add_data(int sinkid, short subid, void *payload, size_t bytes) {
@@ -72,8 +89,36 @@ short pubsub_subscribe(struct subscription *s) {
 void pubsub_unsubscribe(short subid) {
   subnet_unsubscribe(&state.c, subid);
 }
+int pubsub_myid() {
+  return subnet_myid(&state.c);
+}
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
+static enum existance sub_state(struct full_subscription *s) {
+  if (s->sink == -1) {
+    /* invalid (never started) subscription */
+    return UNKNOWN;
+  }
+
+  if (s->revoked == 0) {
+    /* known, non-revoked subscription */
+    return KNOWN;
+  }
+
+  if (clock_seconds() - s->revoked < 600) {
+    /* known, revoked, but not expired subscription */
+    /* TODO: This should be adjustable */
+    return REVOKED;
+  }
+
+  /* known, revoked and expired subscription */
+  return UNKNOWN;
+}
+
+static bool is_active(struct full_subscription *s) {
+  return sub_state(s) == KNOWN;
+}
+
 static void on_subscribe(struct subnet_conn *c, int sink, short subid, void *data) {
   struct full_subscription *s = find_subscription(sink, subid);
   s->subid = subid;
@@ -99,24 +144,7 @@ static void on_unsubscribe(struct subnet_conn *c, int sink, short subid) {
 
 static enum existance on_exists(struct subnet_conn *c, int sink, short subid) {
   struct full_subscription *s = find_subscription(sink, subid);
-  if (s->sink == -1) {
-    /* invalid (never started) subscription */
-    return UNKNOWN;
-  }
-
-  if (s->revoked == 0) {
-    /* known, non-revoked subscription */
-    return KNOWN;
-  }
-
-  if (clock_seconds() - s->revoked < 600) {
-    /* known, revoked, but not expired subscription */
-    /* TODO: This should be adjustable */
-    return REVOKED;
-  }
-
-  /* known, revoked and expired subscription */
-  return UNKNOWN;
+  return sub_state(s);
 }
 
 static size_t on_inform(struct subnet_conn *c, int sink, short subid, void *target) {

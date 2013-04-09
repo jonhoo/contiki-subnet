@@ -82,20 +82,18 @@ bool publisher_needs(enum reading_type t) {
   return needs[t];
 }
 void publisher_publish(enum reading_type t, void *reading) {
+  struct full_subscription *s = NULL;
+
   /* TODO: soft and hard filtering */
   set_needs(t, false);
 
-  struct full_subscription *s;
-
-  for (int subs = pubsub_get_subscriptions(&s); subs >= 0; subs--) {
+  while (pubsub_next_subscription(s)) {
     if (s->in.sensor == t) {
       /* TODO: check return value */
       pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
 
       aggregate_trigger(s->sink);
     }
-
-    s++;
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -107,7 +105,7 @@ static void on_subscription(struct full_subscription *s) {
   }
 }
 static void on_unsubscription(struct full_subscription *old) {
-  struct full_subscription *s;
+  struct full_subscription *s = NULL;
   struct ctimer c = collect[s->in.sensor];
   ctimer_stop(&c);
   clock_time_t max = ~0;
@@ -115,14 +113,13 @@ static void on_unsubscription(struct full_subscription *old) {
 
   enum reading_type t = old->in.sensor;
 
-  for (int subs = pubsub_get_subscriptions(&s); subs >= 0; subs--) {
+  while (pubsub_next_subscription(s)) {
     if (s->in.sensor != t) continue;
     if (s == old) continue;
 
     if (s->in.interval < min) {
       min = s->in.interval;
     }
-    s++;
   }
 
   if (min == max) {

@@ -88,11 +88,11 @@ void pubsub_init(struct pubsub_callbacks *u);
 struct full_subscription * find_subscription(int sink, short subid);
 
 /**
- * \brief Get all known subscriptions
- * \param ss Pointer to make point to array of subscriptions
- * \return Number of known subscriptions
+ * \brief Get the next subscription after the given one
+ * \param prev Pointer to previous subscription (or NULL for first)
+ * \return True if a next subscription was found, false otherwise
  */
-int pubsub_get_subscriptions(struct full_subscription **ss);
+bool pubsub_next_subscription(struct full_subscription *prev);
 
 /**
  * \brief Add data for a subscription to the current publish
