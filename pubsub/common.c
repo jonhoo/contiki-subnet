@@ -22,6 +22,7 @@ static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *d
 static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid);
 static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid);
 static size_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target);
+static void on_sink_left(struct subnet_conn *c, int sink);
 /*---------------------------------------------------------------------------*/
 /* private members */
 struct sink_subscriptions {
@@ -37,7 +38,8 @@ static struct subnet_callbacks su = {
   on_subscribe,
   on_unsubscribe,
   on_exists,
-  on_inform
+  on_inform,
+  on_sink_left
 };
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
@@ -112,6 +114,9 @@ void pubsub_unsubscribe(subid_t subid) {
 int pubsub_myid() {
   return subnet_myid(&state.c);
 }
+void pubsub_close() {
+  subnet_close(&state.c);
+}
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_errpub(struct subnet_conn *c) {
@@ -143,7 +148,7 @@ static enum existance sub_state(struct full_subscription *s) {
     return KNOWN;
   }
 
-  if (clock_seconds() - s->revoked < PUBSUB_REVOKE_PERIOD) {
+  if (clock_seconds() - s->revoked < SUBNET_REVOKE_PERIOD) {
     /* known, revoked, but not expired subscription */
     return REVOKED;
   }
@@ -205,6 +210,16 @@ static size_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *ta
 
   memcpy(target, &s->in, sizeof(struct subscription));
   return sizeof(struct subscription);
+}
+
+static void on_sink_left(struct subnet_conn *c, int sink) {
+  struct sink_subscriptions s = sinks[sink];
+  for (subid_t i = 0; i <= s.maxsub; i++) {
+    if (s.subs[i].revoked == 0) {
+      s.subs[i].revoked = clock_seconds();
+    }
+  }
+  s.maxsub = 0;
 }
 /*---------------------------------------------------------------------------*/
 

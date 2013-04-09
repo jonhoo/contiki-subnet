@@ -46,12 +46,20 @@
 #define SUBNET_PACKET_TYPE_REPLY 0
 #define SUBNET_PACKET_TYPE_UNSUBSCRIBE 2
 #define SUBNET_PACKET_TYPE_INVALIDATE SUBNET_PACKET_TYPE_UNSUBSCRIBE
+#define SUBNET_PACKET_TYPE_LEAVING 3
 
 #define SUBNET_ATTRIBUTES  { PACKETBUF_ATTR_EPACKET_TYPE, 2*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ATTR_EFRAGMENTS,   8*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ATTR_HOPS,         4*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
                              ADISCLOSE_ATTRIBUTES
+
+#ifdef SUBNET_CONF_REVOKE_PERIOD
+#define SUBNET_REVOKE_PERIOD SUBNET_CONF_REVOKE_PERIOD
+#else
+#define SUBNET_REVOKE_PERIOD 600
+#endif
+
 
 typedef uint8_t subid_t;
 /*---------------------------------------------------------------------------*/
@@ -82,6 +90,8 @@ struct sink {
   short fragments;
   size_t buflen;
   char buf[PACKETBUF_SIZE];
+
+  clock_time_t revoked;
 };
 /*---------------------------------------------------------------------------*/
 /* public structs */
@@ -139,6 +149,11 @@ struct subnet_callbacks {
    * the number of bytes written. It is up to this function to make sure the
    * packet is not overfilled (by checking packetbuf_totlen()) */
   size_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target);
+
+  /* called when a sink has indicated that it is leaving for good. Should revoke
+   * all subscriptions to this sink. Note that this sinkid may be reused in the
+   * future! */
+  void (* sink_left)(struct subnet_conn *c, int sinkid);
 };
 /*---------------------------------------------------------------------------*/
 /* public functions */
@@ -155,8 +170,12 @@ void subnet_open(struct subnet_conn *c,
                  const struct subnet_callbacks *u);
 
 /**
- * \brief Close subscription connection
+ * \brief End all subscriptions and close subnet connection
  * \param c Connection state
+ *
+ * Note that this function *MUST* be called before a sink quits to free up
+ * resources in the network, otherwise the sink's later subscriptions may be
+ * ignored!
  */
 void subnet_close(struct subnet_conn *c);
 

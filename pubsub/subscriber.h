@@ -50,7 +50,14 @@ void subscriber_unsubscribe(subid_t subid);
  */
 const struct subscription *subscriber_subscription(subid_t subid);
 
-/* TODO: Add nuke_sink() */
+/**
+ * \brief End all subscriptions and close subnet connection
+ *
+ * Note that this function *MUST* be called before a sink quits to free up
+ * resources in the network, otherwise the sink's later subscriptions may be
+ * ignored!
+ */
+void subscriber_close();
 /*---------------------------------------------------------------------------*/
 
 #endif /* __PUBSUB_SUB_H__ */

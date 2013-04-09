@@ -63,6 +63,10 @@ const struct subscription *subscriber_subscription(subid_t subid) {
 
   return &s->in;
 }
+
+void subscriber_close() {
+  pubsub_close();
+}
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_resubscribe(void *subidp) {

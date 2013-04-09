@@ -69,6 +69,7 @@ static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
 
   return -1;
 }
+
 static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
   int sinkid = find_sinkid(c, sink);
   if (sinkid == -1) {
@@ -76,6 +77,7 @@ static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
   }
   return &c->sinks[sinkid];
 }
+
 static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
   struct sink *s = find_sink(c, sink);
   if (s == NULL) {
@@ -93,6 +95,10 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   struct neighbor *this;
 
   if (route == NULL) {
+    return NULL;
+  }
+
+  if (route->revoked > 0 && clock_seconds() - route->revoked > SUBNET_REVOKE_PERIOD) {
     return NULL;
   }
 
@@ -185,8 +191,34 @@ static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid) {
   return e == UNKNOWN ? false : true;
 }
 
+static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink) {
+  /* this sink has been revoked, let neighbours know! */
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
+  broadcast(&c->pubsub);
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
+}
+
+static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink) {
+  int sinkid = find_sinkid(c, sink);
+  struct sink *s;
+
+  if (sinkid == -1) return;
+
+  s = &c->sinks[sinkid];
+  if (s->revoked != 0) return;
+
+  c->u->sink_left(c, sinkid);
+  s->revoked = clock_seconds();
+  notify_left(c, sink);
+}
+
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   int i;
+  int replacesinkid = -1;
   struct neighbor *n = NULL;
   struct sink *route = NULL;
   struct neighbor *oldest;
@@ -217,31 +249,47 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
     }
 
     rimeaddr_copy(&n->addr, from);
-    n->last_active = clock_seconds();
+    /* TODO: n->cost will vary depending on which sink it's targeting */
     n->cost = packetbuf_attr(PACKETBUF_ATTR_HOPS);
   }
+
+  n->last_active = clock_seconds();
 
   /* find route to sink */
   for (i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
       route = &c->sinks[i];
     }
+    if (replacesinkid == -1 &&
+        c->sinks[i].revoked > 0 &&
+        clock_seconds() - c->sinks[i].revoked > SUBNET_REVOKE_PERIOD) {
+      replacesinkid = i;
+    }
   }
 
   /* create sink node if not found */
   if (route == NULL) {
-    if (c->numsinks >= SUBNET_MAX_SINKS) {
+    if (replacesinkid == -1 && c->numsinks >= SUBNET_MAX_SINKS) {
       PRINTF("%d.%d: subnet: max sinks limit hit\n",
           rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
       return;
     } else {
-      route = &c->sinks[c->numsinks];
+      if (replacesinkid == -1) {
+        route = &c->sinks[c->numsinks];
+      } else {
+        route = &c->sinks[replacesinkid];
+      }
+
       rimeaddr_copy(&route->sink, sink);
       route->advertised_cost = n->cost + 1;
       route->numhops = 0;
       route->buflen = 0;
       route->fragments = 0;
-      c->numsinks++;
+      route->revoked = 0;
+
+      if (replacesinkid == -1) {
+        c->numsinks++;
+      }
     }
   }
 
@@ -329,6 +377,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
 
     {
       int sinkid = find_sinkid(c, sink);
+      struct sink *s;
       struct peer_packet *p = packetbuf_dataptr();
       subid_t *revoked = (subid_t *)(p+1);
       subid_t unknown[p->unknown];
@@ -336,16 +385,27 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
       struct fragment *frag;
       int i;
 
-      /* notify upstream about revoked */
-      for (i = 0; i < p->revoked; i++) {
-        if (c->u->exists(c, sinkid, *revoked) == KNOWN) {
-          c->u->unsubscribe(c, sinkid, *revoked);
+      if (sinkid == -1) return;
+      s = &c->sinks[sinkid];
+
+      if (s->revoked == 0) {
+        /* notify upstream about revoked subs */
+        for (i = 0; i < p->revoked; i++) {
+          if (c->u->exists(c, sinkid, *revoked) == KNOWN) {
+            c->u->unsubscribe(c, sinkid, *revoked);
+          }
+          revoked++;
         }
-        revoked++;
       }
 
       if (!rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER), &rimeaddr_node_addr)) {
         /* don't reply if we're not being asked */
+        return;
+      }
+
+      if (s->revoked != 0) {
+        /* sink has left, let asker know! */
+        notify_left(c, sink);
         return;
       }
 
@@ -387,10 +447,10 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     /* packetbuf now holds info about subscription */
     adisclose_send(&c->peer, from);
 
-  } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_INVALIDATE) {
-    handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
     handle_subscriptions(c, sink, from);
+  } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_LEAVING) {
+    handle_leaving(c, sink);
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -403,12 +463,20 @@ static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   struct subnet_conn *c = (struct subnet_conn *)adisclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
   int sinkid;
+  struct sink *s;
 
   if (c->u->ondata == NULL) {
     return;
   }
 
   sinkid = find_sinkid(c, sink);
+  if (sinkid == -1) return;
+
+  s = &c->sinks[sinkid];
+  if (s->revoked != 0) {
+    notify_left(c, sink);
+    return;
+  }
 
   EACH_PACKET_FRAGMENT(
     c->u->ondata(c, sinkid, subid, payload);
@@ -427,6 +495,8 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE) {
     handle_subscriptions(c, sink, from);
+  } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_LEAVING) {
+    handle_leaving(c, sink);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE) {
     handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_PUBLISH) {
@@ -445,6 +515,13 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
       subid_t unknown[fragments];
 
       int sinkid = find_sinkid(c, sink);
+      if (sinkid == -1) return;
+
+      if (c->sinks[sinkid].revoked != 0) {
+        notify_left(c, sink);
+        return;
+      }
+
       EACH_PACKET_FRAGMENT(
         switch (c->u->exists(c, sinkid, subid)) {
         case REVOKED:
@@ -553,6 +630,14 @@ void subnet_open(struct subnet_conn *c,
 }
 
 void subnet_close(struct subnet_conn *c) {
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
+
+  /* TODO: perhaps do this multiple times for good measure? */
+  broadcast(&c->pubsub);
+
   adisclose_close(&c->pubsub);
   adisclose_close(&c->peer);
 }

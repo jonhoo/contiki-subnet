@@ -34,13 +34,6 @@
 #else
 #define PUBSUB_MAX_SUBSCRIPTIONS 32
 #endif
-
-#ifdef PUBSUB_CONF_REVOKE_PERIOD
-#define PUBSUB_REVOKE_PERIOD PUBSUB_CONF_REVOKE_PERIOD
-#else
-#define PUBSUB_REVOKE_PERIOD 600
-#endif
-
 /*---------------------------------------------------------------------------*/
 struct sfilter {
   enum soft_filter filter;
@@ -149,6 +142,15 @@ void pubsub_unsubscribe(subid_t subid);
  * subscription has been sent out!
  */
 int pubsub_myid();
+
+/**
+ * \brief End all subscriptions and close subnet connection
+ *
+ * Note that this function *MUST* be called before a sink quits to free up
+ * resources in the network, otherwise the sink's later subscriptions may be
+ * ignored!
+ */
+void pubsub_close();
 /*---------------------------------------------------------------------------*/
 
 #endif /* __PUBSUB_H__ */
