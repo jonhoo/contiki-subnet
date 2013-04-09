@@ -55,6 +55,11 @@ static const struct packetbuf_attrlist attributes[] = {
   /* note the cast to char* to be able to move in bytes */       \
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
+struct peer_packet {
+  short revoked;
+  short unknown;
+};
+/*---------------------------------------------------------------------------*/
 static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
   for (int i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
@@ -145,6 +150,12 @@ static short next_fragment(struct fragment **raw, void **payload) {
   return subid;
 }
 
+/* because REVOKED subscriptions are still known */
+static bool is_known(struct subnet_conn *c, int sinkid, short subid) {
+  enum existance e = c->u->exists(c, sinkid, subid);
+  return e == UNKNOWN ? false : true;
+}
+
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   int i;
   struct neighbor *n = NULL;
@@ -232,7 +243,7 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
 }
 
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
-  bool unsubscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE);
+  bool subscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE);
 
   if (c->u->exists == NULL) {
     return;
@@ -242,7 +253,7 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   int sinkid = find_sinkid(c, sink);
 
   EACH_PACKET_FRAGMENT(
-    if (!!c->u->exists(c, sinkid, subid) == unsubscribe) {
+    if (!is_known(c, sinkid, subid) == subscribe) {
       /* something changed, send new subscription to neighbours */
       broadcast(&c->pubsub);
       break;
@@ -254,11 +265,11 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   }
 
   EACH_PACKET_FRAGMENT(
-    if (!!c->u->exists(c, sinkid, subid) == unsubscribe) {
-      if (unsubscribe) {
-        c->u->unsubscribe(c, sinkid, subid);
-      } else {
+    if (!is_known(c, sinkid, subid) == subscribe) {
+      if (subscribe) {
         c->u->subscribe(c, sinkid, subid, payload);
+      } else {
+        c->u->unsubscribe(c, sinkid, subid);
       }
     }
   );
@@ -283,34 +294,47 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_ASK) {
-    if (!rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER), &rimeaddr_node_addr)) {
-      return;
-    }
-
     if (c->u->inform == NULL) {
       return;
     }
 
-    packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_REPLY);
-    packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
     {
-      short fragments = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS);
-      struct fragment *frag = packetbuf_dataptr();
-      void *payload;
-      short subids[fragments];
-      short *subid = packetbuf_dataptr();
       int sinkid = find_sinkid(c, sink);
+      struct peer_packet *p = packetbuf_dataptr();
+      short *revoked = (short *)(p+1);
+      short unkown[p->unknown];
+      short *unknown = revoked + p->revoked;
+      short fragments = 0;
+      struct fragment *frag;
       int i;
 
-      for (i = 0; i < fragments; i++) {
-        subids[i] = subid[i];
+      /* notify upstream about revoked */
+      for (i = 0; i < p->revoked; i++) {
+        if (c->u->exists(c, sinkid, *revoked) == KNOWN) {
+          c->u->unsubscribe(c, sinkid, *revoked);
+        }
+        revoked++;
+      }
+
+      if (!rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER), &rimeaddr_node_addr)) {
+        /* don't reply if we're not being asked */
+        return;
+      }
+
+      /* read in values for unknown so we can reuse the packetbuf */
+      for (i = 0; i < p->unknown; i++) {
+        unknown[i] = *(revoked+i);
       }
 
       packetbuf_set_datalen(0);
-      for (i = 0; i < fragments; i++) {
+      frag = packetbuf_dataptr();
+      for (i = 0; i < p->unknown; i++) {
+        /* increase size by the size of a fragment header */
         packetbuf_set_datalen(packetbuf_datalen() + sizeof(struct fragment));
-        frag->subid = subids[i];
-        frag->length = c->u->inform(c, sinkid, subids[i], frag+1);
+
+        /* set subid and write data to frag+1 (straight after header) */
+        frag->subid = unknown[i];
+        frag->length = c->u->inform(c, sinkid, unknown[i], frag+1);
 
         if (frag->length == 0) {
           /* don't put an empty fragment in there */
@@ -318,11 +342,18 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
           continue;
         }
 
-        payload = (char *) frag;
-        payload += frag->length + sizeof(struct fragment);
-        frag = (struct fragment *) payload;
+        /* update total length and number of included fragments */
         packetbuf_set_datalen(packetbuf_datalen() + frag->length);
+        fragments++;
+
+        /* write move pointer past written data */
+        SKIPBYTES(frag, struct fragment *, frag->length + sizeof(struct fragment));
+
       }
+
+      packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_REPLY);
+      packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
+      packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, fragments);
     }
 
     /* packetbuf now holds info about subscription */
@@ -377,29 +408,47 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     }
 
     {
+      /* ask peer for clarification */
       short fragments = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS);
-      short unknowns[fragments];
-      short numunknowns = 0;
-      int sinkid = find_sinkid(c, sink);
       struct queuebuf *q;
+      struct peer_packet p = { 0, 0 };
+
+      short revoked[fragments];
+      short unknown[fragments];
+
+      int sinkid = find_sinkid(c, sink);
       EACH_PACKET_FRAGMENT(
-        if (!c->u->exists(c, sinkid, subid)) {
-          unknowns[numunknowns] = subid;
-          numunknowns++;
+        switch (c->u->exists(c, sinkid, subid)) {
+        case REVOKED:
+          revoked[p.revoked++] = subid;
+          break;
+        case UNKNOWN:
+          unknown[p.unknown++] = subid;
+          break;
+        case KNOWN:
+          break;
         }
       );
 
-      /* TODO: Send invalidate for known unsubscriptions */
-
-      /* ask peer for clarification */
+      /* store current packetbuf */
       q = queuebuf_new_from_packetbuf();
 
+      /* base attrs and length struct */
       packetbuf_clear();
+      packetbuf_copyfrom(&p, sizeof(struct peer_packet));
       packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_ASK);
       packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
-      packetbuf_copyfrom(&unknowns, numunknowns * sizeof(short));
-      adisclose_send(&c->peer, from);
 
+      /* write revoked */
+      memcpy(packetbuf_dataptr() + packetbuf_datalen(), revoked, p.revoked * sizeof(short));
+      packetbuf_set_datalen(packetbuf_datalen() + p.revoked * sizeof(short));
+
+      /* write unknown */
+      memcpy(packetbuf_dataptr() + packetbuf_datalen(), unknown, p.unknown * sizeof(short));
+      packetbuf_set_datalen(packetbuf_datalen() + p.unknown * sizeof(short));
+
+      /* send and restore */
+      adisclose_send(&c->peer, from);
       queuebuf_to_packetbuf(q);
       queuebuf_free(q);
     }

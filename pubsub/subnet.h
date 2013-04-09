@@ -102,6 +102,14 @@ struct subnet_conn {
                                        sent to the next hop */
 };
 
+enum existance {
+  UNKNOWN,
+  KNOWN,
+  REVOKED
+};
+
+/* implementors can expect exists to have returned the appropriate value before
+ * calls to subscribe, unsubscribe and inform */
 struct subnet_callbacks {
   /* called if no next hop can be contacted */
   void (* errpub)(struct subnet_conn *c);
@@ -123,7 +131,7 @@ struct subnet_callbacks {
   /* should return true if the given subscription is known. Note that this
    * function may be called quite frequently, so it may be well worth to
    * optimize */
-  bool (* exists)(struct subnet_conn *c, int sinkid, short subid);
+  enum existance (* exists)(struct subnet_conn *c, int sinkid, short subid);
 
   /* should fill target with information about the given subscription and return
    * the number of bytes written. It is up to this function to make sure the
