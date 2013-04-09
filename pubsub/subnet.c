@@ -55,11 +55,186 @@ static const struct packetbuf_attrlist attributes[] = {
   /* note the cast to char* to be able to move in bytes */       \
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
-struct peer_packet {
-  short revoked;
-  short unknown;
+/* private functions */
+static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink);
+static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink);
+static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink);
+static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto);
+static void broadcast(struct adisclose_conn *c);
+static subid_t next_fragment(struct fragment **raw, void **payload);
+static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid);
+static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink);
+static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
+static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
+static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
+static void clean_buffers(struct subnet_conn *c, struct sink *s);
+
+static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno);
+static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno);
+static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno);
+static void on_timedout(struct adisclose_conn *adisclose, const rimeaddr_t *to);
+static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to);
+/*---------------------------------------------------------------------------*/
+/* private members */
+static const struct adisclose_callbacks subnet = {
+  on_recv,
+  on_sent,
+  on_timedout,
+  on_hear,
+};
+
+static const struct adisclose_callbacks peer = {
+  on_peer,
+  NULL,
+  NULL,
+  on_peer,
 };
 /*---------------------------------------------------------------------------*/
+/* public function definitions */
+void subnet_open(struct subnet_conn *c,
+                 uint16_t subchannel,
+                 uint16_t peerchannel,
+                 const struct subnet_callbacks *u) {
+  adisclose_open(&c->pubsub, subchannel, &subnet);
+  adisclose_open(&c->peer, peerchannel, &peer);
+  channel_set_attributes(subchannel, attributes);
+  channel_set_attributes(peerchannel, attributes);
+  c->u = u;
+  c->subid = 0;
+  c->numsinks = 0;
+}
+
+void subnet_close(struct subnet_conn *c) {
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
+
+  /* TODO: perhaps do this multiple times for good measure? */
+  broadcast(&c->pubsub);
+
+  adisclose_close(&c->pubsub);
+  adisclose_close(&c->peer);
+}
+
+bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
+  if (sinkid >= c->numsinks) {
+    return false;
+  }
+  struct sink *s = &c->sinks[sinkid];
+
+  uint16_t l = s->buflen;
+  size_t sz = sizeof(struct fragment) + bytes;
+  if (l + sz > PACKETBUF_SIZE) {
+    return false;
+  }
+
+  struct fragment *f = (struct fragment *) (s->buf+s->buflen);
+  f->subid = subid;
+  f->length = bytes;
+
+  s->buflen += sz;
+  s->fragments++;
+  memcpy(f+1, payload, bytes);
+
+  return true;
+}
+
+void subnet_publish(struct subnet_conn *c, int sinkid) {
+  if (sinkid >= c->numsinks) {
+    return;
+  }
+  struct sink *s = &c->sinks[sinkid];
+
+  const rimeaddr_t *nexthop = get_next_hop(c, s, NULL);
+  if (nexthop == NULL || adisclose_is_transmitting(&c->pubsub)) {
+    if (c->u->errpub != NULL) {
+      c->u->errpub(c);
+    }
+    return;
+  }
+
+  /* preserve existing packetbuf */
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, &s->sink));
+  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &s->sink);
+  memcpy(packetbuf_dataptr(), s->buf, s->buflen);
+
+  adisclose_send(&c->pubsub, nexthop);
+
+  /* store publish packet and restore old packetbuf */
+  c->sentpacket = queuebuf_new_from_packetbuf();
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
+}
+
+subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
+  subid_t subid = c->subid;
+  subnet_resubscribe(c, subid, payload, bytes);
+  c->subid++;
+  return subid;
+}
+
+void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes) {
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, 1);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
+
+  struct fragment *f = packetbuf_dataptr();
+  f->subid = subid;
+  f->length = bytes;
+  f++;
+  memcpy(f, payload, bytes);
+  packetbuf_set_datalen(sizeof(struct fragment) + bytes);
+
+  if (!is_known(c, subnet_myid(c), subid)) {
+    handle_subscriptions(c, &rimeaddr_node_addr, NULL);
+    // handle_subscriptions will take care of the broadcast
+  } else {
+    broadcast(&c->pubsub);
+  }
+
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
+}
+
+void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
+  struct queuebuf *q = queuebuf_new_from_packetbuf();
+
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
+
+  struct fragment *f = packetbuf_dataptr();
+  f->subid = subid;
+  f->length = 0;
+  packetbuf_set_datalen(sizeof(struct fragment));
+
+  broadcast(&c->pubsub);
+
+  queuebuf_to_packetbuf(q);
+  queuebuf_free(q);
+}
+
+int subnet_myid(struct subnet_conn *c) {
+  static int myid = -1;
+  if (myid == -1) {
+    myid = find_sinkid(c, &rimeaddr_node_addr);
+  }
+  return myid;
+}
+/*---------------------------------------------------------------------------*/
+/* private function definitions */
 static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
   for (int i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
@@ -86,6 +261,7 @@ static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink
 
   return s->advertised_cost;
 }
+
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto) {
   int i;
   int previ = -1;
@@ -364,6 +540,7 @@ static void clean_buffers(struct subnet_conn *c, struct sink *s) {
   }
 }
 /*---------------------------------------------------------------------------*/
+/* private callback function definitions */
 static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, uint8_t seqno) {
   /* peer points to second adisclose_conn, so we need to decrement to cast to
    * subnet_conn */
@@ -453,7 +630,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     handle_leaving(c, sink);
   }
 }
-/*---------------------------------------------------------------------------*/
+
 /**
  * This is called when a downstream node sends a publish message to us as next
  * hop to forward towards the sink, so forward. Subscription must be known to us
@@ -603,159 +780,4 @@ static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
   );
 }
 /*---------------------------------------------------------------------------*/
-static const struct adisclose_callbacks subnet = {
-  on_recv,
-  on_sent,
-  on_timedout,
-  on_hear,
-};
-static const struct adisclose_callbacks peer = {
-  on_peer,
-  NULL,
-  NULL,
-  on_peer,
-};
-/*---------------------------------------------------------------------------*/
-void subnet_open(struct subnet_conn *c,
-                 uint16_t subchannel,
-                 uint16_t peerchannel,
-                 const struct subnet_callbacks *u) {
-  adisclose_open(&c->pubsub, subchannel, &subnet);
-  adisclose_open(&c->peer, peerchannel, &peer);
-  channel_set_attributes(subchannel, attributes);
-  channel_set_attributes(peerchannel, attributes);
-  c->u = u;
-  c->subid = 0;
-  c->numsinks = 0;
-}
-
-void subnet_close(struct subnet_conn *c) {
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
-
-  /* TODO: perhaps do this multiple times for good measure? */
-  broadcast(&c->pubsub);
-
-  adisclose_close(&c->pubsub);
-  adisclose_close(&c->peer);
-}
-
-bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
-  if (sinkid >= c->numsinks) {
-    return false;
-  }
-  struct sink *s = &c->sinks[sinkid];
-
-  uint16_t l = s->buflen;
-  size_t sz = sizeof(struct fragment) + bytes;
-  if (l + sz > PACKETBUF_SIZE) {
-    return false;
-  }
-
-  struct fragment *f = (struct fragment *) (s->buf+s->buflen);
-  f->subid = subid;
-  f->length = bytes;
-
-  s->buflen += sz;
-  s->fragments++;
-  memcpy(f+1, payload, bytes);
-
-  return true;
-}
-
-void subnet_publish(struct subnet_conn *c, int sinkid) {
-  if (sinkid >= c->numsinks) {
-    return;
-  }
-  struct sink *s = &c->sinks[sinkid];
-
-  const rimeaddr_t *nexthop = get_next_hop(c, s, NULL);
-  if (nexthop == NULL || adisclose_is_transmitting(&c->pubsub)) {
-    if (c->u->errpub != NULL) {
-      c->u->errpub(c);
-    }
-    return;
-  }
-
-  /* preserve existing packetbuf */
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, &s->sink));
-  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &s->sink);
-  memcpy(packetbuf_dataptr(), s->buf, s->buflen);
-
-  adisclose_send(&c->pubsub, nexthop);
-
-  /* store publish packet and restore old packetbuf */
-  c->sentpacket = queuebuf_new_from_packetbuf();
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
-}
-
-subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
-  subid_t subid = c->subid;
-  subnet_resubscribe(c, subid, payload, bytes);
-  c->subid++;
-  return subid;
-}
-
-void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes) {
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, 1);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
-
-  struct fragment *f = packetbuf_dataptr();
-  f->subid = subid;
-  f->length = bytes;
-  f++;
-  memcpy(f, payload, bytes);
-  packetbuf_set_datalen(sizeof(struct fragment) + bytes);
-
-  if (!is_known(c, subnet_myid(c), subid)) {
-    handle_subscriptions(c, &rimeaddr_node_addr, NULL);
-    // handle_subscriptions will take care of the broadcast
-  } else {
-    broadcast(&c->pubsub);
-  }
-
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
-}
-
-void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
-
-  struct fragment *f = packetbuf_dataptr();
-  f->subid = subid;
-  f->length = 0;
-  packetbuf_set_datalen(sizeof(struct fragment));
-
-  broadcast(&c->pubsub);
-
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
-}
-
-int subnet_myid(struct subnet_conn *c) {
-  static int myid = -1;
-  if (myid == -1) {
-    myid = find_sinkid(c, &rimeaddr_node_addr);
-  }
-  return myid;
-}
 /** @} */

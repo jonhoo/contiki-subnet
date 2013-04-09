@@ -64,6 +64,17 @@
 typedef uint8_t subid_t;
 /*---------------------------------------------------------------------------*/
 /* private structs */
+/**
+ * \brief Header for peer packets
+ */
+struct peer_packet {
+  short revoked;
+  short unknown;
+};
+
+/**
+ * \brief Header for each subscription in pubsub packets
+ */
 struct fragment {
   subid_t subid;
   size_t length;
