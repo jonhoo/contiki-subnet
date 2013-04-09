@@ -587,6 +587,12 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
 
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
   short subid = c->subid;
+  subnet_resubscribe(c, subid, payload, bytes);
+  c->subid++;
+  return subid;
+}
+
+void subnet_resubscribe(struct subnet_conn *c, short subid, void *payload, size_t bytes) {
   struct queuebuf *q = queuebuf_new_from_packetbuf();
 
   packetbuf_clear();
@@ -602,14 +608,15 @@ short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
   memcpy(f, payload, bytes);
   packetbuf_set_datalen(sizeof(struct fragment) + bytes);
 
-  handle_subscriptions(c, &rimeaddr_node_addr, NULL);
-  // handle_subscriptions will take care of the broadcast
+  if (!is_known(c, subnet_myid(c), subid)) {
+    handle_subscriptions(c, &rimeaddr_node_addr, NULL);
+    // handle_subscriptions will take care of the broadcast
+  } else {
+    broadcast(&c->pubsub);
+  }
 
   queuebuf_to_packetbuf(q);
   queuebuf_free(q);
-
-  c->subid++;
-  return subid;
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, short subid) {
@@ -633,6 +640,7 @@ void subnet_unsubscribe(struct subnet_conn *c, short subid) {
 }
 
 int subnet_myid(struct subnet_conn *c) {
+  /* TODO: optimize */
   return find_sinkid(c, &rimeaddr_node_addr);
 }
 /** @} */

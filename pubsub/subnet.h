@@ -179,12 +179,22 @@ void subnet_publish(struct subnet_conn *c, int sinkid);
 /**
  * \brief Send out a new subscription
  * \param c Connection state
+ * \param payload Where to read the subscription data from
+ * \param bytes Size of the subscription data
  * \return The subscription id of the new subscription
  *
  * TODO: Allow multiple subscriptions in a single send?
- * TODO: Should broadcast even if exists
  */
 short subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
+
+/**
+ * \brief Send out a new subscription
+ * \param c Connection state
+ * \param subid Subscription id to resubscribe to
+ * \param payload Where to read the subscription data from
+ * \param bytes Size of the subscription data
+ */
+void subnet_resubscribe(struct subnet_conn *c, short subid, void *payload, size_t bytes);
 
 /**
  * \brief End the given subscription

@@ -30,13 +30,15 @@ void subscriber_start(void (*cb)(short subid, void *data)) {
 }
 
 short subscriber_subscribe(struct subscription *s) {
+  /* TODO: Start resubscription timer */
   return pubsub_subscribe(s);
 }
 short subscriber_replace(short subid, struct subscription *s) {
-  pubsub_unsubscribe(subid);
-  return pubsub_subscribe(s);
+  subscriber_unsubscribe(subid);
+  return subscriber_subscribe(s);
 }
 void subscriber_unsubscribe(short subid) {
+  /* TODO: Stop resubscription timer */
   pubsub_unsubscribe(subid);
 }
 
