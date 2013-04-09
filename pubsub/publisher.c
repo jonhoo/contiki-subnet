@@ -87,7 +87,7 @@ void publisher_publish(enum reading_type t, void *reading) {
   /* TODO: soft and hard filtering */
   set_needs(t, false);
 
-  while (pubsub_next_subscription(s)) {
+  while (pubsub_next_subscription(&s)) {
     if (s->in.sensor == t) {
       /* TODO: check return value */
       pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
@@ -113,7 +113,7 @@ static void on_unsubscription(struct full_subscription *old) {
 
   enum reading_type t = old->in.sensor;
 
-  while (pubsub_next_subscription(s)) {
+  while (pubsub_next_subscription(&s)) {
     if (s->in.sensor != t) continue;
     if (s == old) continue;
 
