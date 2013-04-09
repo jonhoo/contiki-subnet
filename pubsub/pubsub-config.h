@@ -22,6 +22,10 @@ union hard_arg {
   double reading;
 };
 
-enum aggregator {
+enum aggregator_t {
   AGGREGATOR_1
+};
+
+union aggregator_arg {
+  double distance;
 };

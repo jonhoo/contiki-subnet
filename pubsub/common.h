@@ -43,11 +43,15 @@ struct hfilter {
   enum hard_filter filter;
   union hard_arg   arg;
 };
+struct aggregator {
+  enum aggregator_t    a;
+  union aggregator_arg arg;
+};
 struct subscription {
   clock_time_t      interval;
   struct sfilter    soft;
   struct hfilter    hard;
-  enum aggregator   aggregator;
+  struct aggregator aggregator;
   enum reading_type sensor;
 };
 struct full_subscription {
@@ -91,6 +95,13 @@ void pubsub_init(struct pubsub_callbacks *u);
  * \return The found subscription or NULL if the subscription is unknown
  */
 struct full_subscription * find_subscription(int sink, subid_t subid);
+
+/**
+ * \brief Determine if the given subscription is active
+ * \param s Subscription
+ * \return True if subscription is KNOWN, false otherwise
+ */
+bool is_active(struct full_subscription *s);
 
 /**
  * \brief Make the given pointer point to the next subscription
@@ -142,6 +153,42 @@ void pubsub_unsubscribe(subid_t subid);
  * subscription has been sent out!
  */
 int pubsub_myid();
+
+/**
+ * \brief Redirect all writes to the given sink to a spare buffer
+ * \param sinkid Sink to redirect writes for
+ *
+ * Note that only a single buffer is available per buffer, so this function can
+ * only be active for one sink at the time.
+ */
+void pubsub_writeout(int sinkid);
+
+/**
+ * \brief Write all data from the spare buffer into the sink's data
+ */
+void pubsub_writein();
+
+/**
+ * \brief Find all published values for the given subscription
+ * \param sub The subscription to find values for
+ * \param payloads Array into which to load pointers to values. Needs to be able
+ *          to hold PUBSUB_MAX_SUBSCRIPTIONS values.
+ * \return The number of values extracted
+ *
+ * This function will fill the passed array with pointers directly to each
+ * reading payload it finds in the sink's current packet buffer.
+ *
+ * If you use this data to write data to the packetbuf, you might want to look
+ * at wrapping it in pubsub_writeout() and pubsub_writein().
+ */
+int extract_data(struct full_subscription *sub, void *payloads[]);
+
+/**
+ * \brief Find the highest known subscription id for the given sink
+ * \param sink The sink id
+ * \return the highest known subscription id for the given sink
+ */
+int last_subscription(int sink);
 
 /**
  * \brief End all subscriptions and close subnet connection

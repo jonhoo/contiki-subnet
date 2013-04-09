@@ -44,17 +44,20 @@ static int numneeds;
 
 static bool (* soft_filter)(struct sfilter *f, enum reading_type t, void *data);
 static bool (* hard_filter)(struct hfilter *f);
+static void (* aggregator)(struct aggregator *a, struct full_subscription *s, int items, void *datas[]);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
-  bool (* hard_filter_proxy)(struct hfilter *f)
+  bool (* hard_filter_proxy)(struct hfilter *f),
+  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[])
 ) {
   clock_time_t max = ~0;
   int i;
 
   soft_filter = soft_filter_proxy;
   hard_filter = hard_filter_proxy;
+  aggregator = aggregator_proxy;
 
   etarget = PROCESS_CURRENT();
   pubsub_init(&callbacks);
@@ -96,10 +99,9 @@ void publisher_publish(enum reading_type t, void *reading) {
   set_needs(t, false);
 
   while (pubsub_next_subscription(&s)) {
-    /* TODO: respect individual subscriptions interval? */
     if (s->in.sensor == t) {
       /* don't add data if it doesn't pass the hard filter */
-      if (!hard_filter(&s->in.hard)) continue;
+      if (hard_filter(&s->in.hard)) continue;
 
       if (!soft_filter(&s->in.soft, t, reading)) {
         added_data = pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
@@ -186,9 +188,35 @@ static void on_collect_timer_expired(void *tp) {
   ctimer_reset(&collect[t]);
 }
 static void on_aggregate_timer_expired(void *sinkp) {
+  static void *payloads[PUBSUB_MAX_SUBSCRIPTIONS];
+  struct full_subscription *sub = NULL;
   int sink = *((int *)sinkp);
-  /* TODO: call aggregator */
-  /* Add a zero-record for every subscription not present and not hard-filtered */
+  int maxsub = last_subscription(sink);
+  int num, i;
+
+  pubsub_writeout(sink);
+  for (int subid = 0; subid < maxsub; subid++) {
+    sub = find_subscription(sink, subid);
+
+    if (!is_active(sub)) {
+      if (hard_filter(&sub->in.hard)) continue;
+
+      num = extract_data(sub, payloads);
+      if (num == 0) {
+        pubsub_add_data(sink, subid, NULL, 0);
+      } else if (aggregator == NULL) {
+        for (i = 0; i < num; i++) {
+          /* it is safe to use rsize[t] here because we know received values
+           * won't have been aggregated either */
+          pubsub_add_data(sink, subid, payloads[i], rsize[sub->in.sensor]);
+        }
+      } else {
+        aggregator(&sub->in.aggregator, sub, num, payloads);
+        /* aggregator will call pubsub_add_data(sink, subid, ...) */
+      }
+    }
+  }
+  pubsub_writein();
   pubsub_publish(sink);
 }
 /*---------------------------------------------------------------------------*/

@@ -29,23 +29,6 @@ static const struct packetbuf_attrlist attributes[] = {
 #endif
 
 /*---------------------------------------------------------------------------*/
-#define EACH_FRAGMENT(FRAGMENTS, BUF, BLOCK) \
-  { \
-    int fragi;                                                   \
-    subid_t subid;                                               \
-    short fragments = FRAGMENTS;                                 \
-    struct fragment *frag = (struct fragment *) BUF;             \
-    void *payload;                                               \
-                                                                 \
-    for (fragi = 0; fragi < fragments; fragi++) {                \
-      subid = next_fragment(&frag, &payload);                    \
-      BLOCK \
-    } \
-  }
-
-#define EACH_SINK_FRAGMENT(S, BLOCK) \
-  EACH_FRAGMENT(S->fragments, S->buf, BLOCK)
-
 #define EACH_PACKET_FRAGMENT(BLOCK) \
   EACH_FRAGMENT(packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS),      \
                 packetbuf_dataptr(),                            \
@@ -61,7 +44,6 @@ static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink);
 static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink);
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto);
 static void broadcast(struct adisclose_conn *c);
-static subid_t next_fragment(struct fragment **raw, void **payload);
 static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid);
 static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink);
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
@@ -102,6 +84,7 @@ void subnet_open(struct subnet_conn *c,
   c->u = u;
   c->subid = 0;
   c->numsinks = 0;
+  c->writeout = false;
 }
 
 void subnet_close(struct subnet_conn *c) {
@@ -118,10 +101,17 @@ void subnet_close(struct subnet_conn *c) {
 }
 
 bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
+  struct sink *s;
+
   if (sinkid >= c->numsinks) {
     return false;
   }
-  struct sink *s = &c->sinks[sinkid];
+
+  if (c->writeout == sinkid) {
+    s = &c->writesink;
+  } else {
+    s = &c->sinks[sinkid];
+  }
 
   uint16_t l = s->buflen;
   size_t sz = sizeof(struct fragment) + bytes;
@@ -138,6 +128,23 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
   memcpy(f+1, payload, bytes);
 
   return true;
+}
+
+void subnet_writeout(struct subnet_conn *c, int sinkid) {
+  c->writeout = sinkid;
+  c->writesink.fragments = 0;
+  c->writesink.buflen = 0;
+}
+
+void subnet_writein(struct subnet_conn *c) {
+  struct sink *s;
+  if (c->writeout == -1) return;
+
+  s = &c->sinks[c->writeout];
+  s->fragments = c->writesink.fragments;
+  s->buflen = c->writesink.buflen;
+  memcpy(s->buf, c->writesink.buf, c->writesink.buflen);
+  c->writeout = -1;
 }
 
 void subnet_publish(struct subnet_conn *c, int sinkid) {
@@ -232,6 +239,22 @@ int subnet_myid(struct subnet_conn *c) {
     myid = find_sinkid(c, &rimeaddr_node_addr);
   }
   return myid;
+}
+
+subid_t next_fragment(struct fragment **raw, void **payload) {
+  subid_t subid = (*raw)->subid;
+  size_t length = (*raw)->length;
+  /* move past subid + length */
+  *raw = *raw + 1;
+  /* we're now at the payload */
+  *payload = *raw;
+  /* move past (length of payload) bytes */
+  SKIPBYTES(*raw, struct fragment *, length);
+  return subid;
+}
+
+const struct sink *subnet_sink(struct subnet_conn *c, int sinkid) {
+  return &c->sinks[sinkid];
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
@@ -337,28 +360,6 @@ static void broadcast(struct adisclose_conn *c) {
    * disclose_conn as its first member. We use disclose rather than adisclose
    * since this is a broadcast and we don't want to wait for ACKs */
   disclose_send((struct disclose_conn *) c, &rimeaddr_node_addr);
-}
-
-/*
- * This function deserves some explanation.
- * It takes a pointer to a fragment pointer and a pointer to a payload pointer.
- * The former should initially point to the first data byte in a packet, and the
- * latter to an empty void pointer.
- * After being called, the first pointer will point to the next fragment, and
- * payload will point to the data contained in this fragment.
- * This function should only be called as many times as there are fragments in
- * the packet.
- */
-static subid_t next_fragment(struct fragment **raw, void **payload) {
-  subid_t subid = (*raw)->subid;
-  size_t length = (*raw)->length;
-  /* move past subid + length */
-  *raw = *raw + 1;
-  /* we're now at the payload */
-  *payload = *raw;
-  /* move past (length of payload) bytes */
-  SKIPBYTES(*raw, struct fragment *, length);
-  return subid;
 }
 
 /* because REVOKED subscriptions are still known */

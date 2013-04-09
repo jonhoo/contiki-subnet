@@ -27,10 +27,14 @@
  *          NULL pointer if the node doesn't have the given sensor
  * \param hard_filter_proxy Function to use as a hard filter proxy. Should
  *          return true if the value should be filtered.
+ * \param aggregator_proxy Function to use as an aggregator. Should call
+ *          pubsub_add_data with every aggregated value. items is a count of the
+ *          number of data items, and datas is a list of pointers to each value.
  */
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
-  bool (* hard_filter_proxy)(struct hfilter *f)
+  bool (* hard_filter_proxy)(struct hfilter *f),
+  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[])
 );
 
 /**

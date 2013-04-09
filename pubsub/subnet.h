@@ -130,6 +130,9 @@ struct subnet_conn {
 
   struct queuebuf *sentpacket;      /* store a publish message until it has been
                                        sent to the next hop */
+
+  int writeout;
+  struct sink writesink;
 };
 
 enum existance {
@@ -249,7 +252,66 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid);
  * subscription has been sent out!
  */
 int subnet_myid(struct subnet_conn *c);
+
+/**
+ * \brief Redirect all writes to the given sink to a spare buffer
+ * \param c Connection state
+ * \param sinkid Sink to redirect writes for
+ *
+ * Note that only a single buffer is available per buffer, so this function can
+ * only be active for one sink at the time.
+ */
+void subnet_writeout(struct subnet_conn *c, int sinkid);
+
+/**
+ * \brief Write all data from the spare buffer into the sink's data
+ * \param c Connection state
+ */
+void subnet_writein(struct subnet_conn *c);
 /*---------------------------------------------------------------------------*/
+/* things that shouldn't *really* be public, but have to be */
+/**
+ * \brief Moves the given fragment pointer to the next fragment
+ * \param raw Previous fragment pointer
+ * \param payload Pointer to make point to fragment contents
+ *
+ * This function deserves some explanation.
+ * It takes a pointer to a fragment pointer and a pointer to a payload pointer.
+ * The former should initially point to the first data byte in a packet, and the
+ * latter to an empty void pointer.
+ * After being called, the first pointer will point to the next fragment, and
+ * payload will point to the data contained in this fragment.
+ * This function should only be called as many times as there are fragments in
+ * the packet.
+ */
+subid_t next_fragment(struct fragment **raw, void **payload);
+
+/**
+ * \brief Get a pointer to the real sink struct for the given sink
+ * \param c Connection state
+ * \param sinkid Sink to get data for
+ * \return The real sink struct for the given sink. Be careful!
+ */
+const struct sink *subnet_sink(struct subnet_conn *c, int sinkid);
+
+#define EACH_FRAGMENT(FRAGMENTS, BUF, BLOCK) \
+  { \
+    int fragi;                                                   \
+    subid_t subid;                                               \
+    short fragments = FRAGMENTS;                                 \
+    struct fragment *frag = (struct fragment *) BUF;             \
+    void *payload;                                               \
+                                                                 \
+    for (fragi = 0; fragi < fragments; fragi++) {                \
+      subid = next_fragment(&frag, &payload);                    \
+      BLOCK \
+    } \
+  }
+
+#define EACH_SINK_FRAGMENT(S, BLOCK) \
+  EACH_FRAGMENT(S->fragments, S->buf, BLOCK)
+/*---------------------------------------------------------------------------*/
+
 
 #endif /* __SUBNET_H__ */
 /** @} */

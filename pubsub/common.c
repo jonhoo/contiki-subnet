@@ -13,7 +13,6 @@
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static enum existance sub_state(struct full_subscription *s);
-static bool is_active(struct full_subscription *s);
 
 static void on_errpub(struct subnet_conn *c);
 static void on_ondata(struct subnet_conn *c, int sink, subid_t subid, void *data);
@@ -45,6 +44,17 @@ static struct subnet_callbacks su = {
 /* public function definitions */
 struct full_subscription * find_subscription(int sink, subid_t subid) {
   return &sinks[sink].subs[subid];
+}
+
+int last_subscription(int sink) {
+  return sinks[sink].maxsub;
+}
+
+bool is_active(struct full_subscription *s) {
+  if (s == NULL) {
+    return false;
+  }
+  return sub_state(s) == KNOWN;
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
@@ -117,6 +127,26 @@ int pubsub_myid() {
 void pubsub_close() {
   subnet_close(&state.c);
 }
+int extract_data(struct full_subscription *sub, void *payloads[]) {
+  /* TODO: this is not clean separation of concerns - it's a dirty dirty hack */
+  const struct sink *s = subnet_sink(&state.c, sub->sink);
+  int num = 0;
+
+  EACH_SINK_FRAGMENT(s,
+    if (subid != sub->subid) continue;
+    if (frag->length == 0) continue;
+    payloads[num] = payload;
+    num++;
+  );
+
+  return num;
+}
+void pubsub_writeout(int sinkid) {
+  subnet_writeout(&state.c, sinkid);
+}
+void pubsub_writein() {
+  subnet_writein(&state.c);
+}
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_errpub(struct subnet_conn *c) {
@@ -155,13 +185,6 @@ static enum existance sub_state(struct full_subscription *s) {
 
   /* known, revoked and expired subscription */
   return UNKNOWN;
-}
-
-static bool is_active(struct full_subscription *s) {
-  if (s == NULL) {
-    return false;
-  }
-  return sub_state(s) == KNOWN;
 }
 
 static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data) {
