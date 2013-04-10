@@ -57,9 +57,10 @@ static void (* aggregator)(struct aggregator *a, struct full_subscription *s, in
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
   bool (* hard_filter_proxy)(struct hfilter *f),
-  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[])
+  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[]),
+  clock_time_t agg_interval
 ) {
-  clock_time_t max = ~0;
+  clock_time_t max = (~((clock_time_t)0) / 2);
   int i;
 
   soft_filter = soft_filter_proxy;
@@ -84,7 +85,7 @@ void publisher_start(
      * array where each index points to its own value. We can then use the
      * address of each element for the pointer to pass to the callback. Yay :( */
     is[i] = i;
-    ctimer_set(&aggregate[i], max, &on_aggregate_timer_expired, &is[i]);
+    ctimer_set(&aggregate[i], agg_interval, &on_aggregate_timer_expired, &is[i]);
     ctimer_stop(&aggregate[i]);
 
     /* makes ctimer_expired return true before the timer was started */
@@ -133,7 +134,7 @@ static void on_unsubscription(struct full_subscription *old) {
   struct ctimer c = collect[s->in.sensor];
   PRINTF("publisher: removing subscription for sink %d (id: %d, sensor: %d)\n", s->sink, s->subid, s->in.sensor);
   ctimer_stop(&c);
-  clock_time_t max = ~0;
+  clock_time_t max = (~((clock_time_t)0) / 2);
   clock_time_t min = max;
 
   enum reading_type t = old->in.sensor;

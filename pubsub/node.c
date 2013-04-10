@@ -44,7 +44,7 @@ PROCESS_THREAD(node_process, ev, data)
   printf("initialized location to <%03d, %03d>\n", l.x, l.y);
 
   // Initialize publisher
-  publisher_start(&soft_filter_proxy, NULL, NULL);
+  publisher_start(&soft_filter_proxy, NULL, NULL, 10*CLOCK_SECOND);
 
   // Dynamic properties
   publisher_has(READING_HUMIDITY, sizeof(humidity));

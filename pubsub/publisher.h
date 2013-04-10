@@ -34,7 +34,8 @@
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
   bool (* hard_filter_proxy)(struct hfilter *f),
-  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[])
+  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[]),
+  clock_time_t agg_interval
 );
 
 /**
