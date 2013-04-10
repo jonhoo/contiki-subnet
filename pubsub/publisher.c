@@ -106,6 +106,9 @@ void publisher_publish(enum reading_type t, void *reading) {
   struct wsubscription s;
   bool added_data = true;
   set_needs(t, false);
+  PRINTF("publisher: incoming reading for sensor %d\n", t);
+  PRINTF("publisher: resetting collection timer with interval %lu\n", collect[t].etimer.timer.interval);
+  ctimer_restart(&collect[t]);
 
   s.sink = -1;
   while (pubsub_next_subscription(&s)) {
@@ -113,8 +116,12 @@ void publisher_publish(enum reading_type t, void *reading) {
       /* don't add data if it doesn't pass the hard filter */
       if (hard_filter != NULL && hard_filter(&s.esub->in.hard)) continue;
 
+      PRINTF("publisher: applying to subscription %d:%d\n", s.sink, s.subid);
+
       if (!soft_filter(&s.esub->in.soft, t, reading)) {
         added_data = pubsub_add_data(s.sink, s.subid, reading, rsize[t]);
+      } else {
+        PRINTF("publisher: reading soft filtered, so not writing\n");
       }
 
       aggregate_trigger(s.sink, added_data);
@@ -124,14 +131,14 @@ void publisher_publish(enum reading_type t, void *reading) {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_subscription(struct esubscription *s) {
-  struct ctimer c = collect[s->in.sensor];
+  struct ctimer *c = &collect[s->in.sensor];
   PRINTF("publisher: got new subscription for sensor: %d\n", s->in.sensor);
-  if (s->in.interval < c.etimer.timer.interval) {
-    PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c.etimer.timer.interval);
-    ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
+  if (s->in.interval < c->etimer.timer.interval) {
+    PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c->etimer.timer.interval);
+    ctimer_set(c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
     on_collect_timer_expired(&s->in.sensor);
   } else {
-    PRINTF("publisher: current interval %lu < subscription's %lu, ignoring\n", c.etimer.timer.interval, s->in.interval);
+    PRINTF("publisher: current interval %lu < subscription's %lu, ignoring\n", c->etimer.timer.interval, s->in.interval);
   }
 }
 static void on_unsubscription(struct esubscription *old) {
@@ -167,9 +174,8 @@ static void on_unsubscription(struct esubscription *old) {
 static void aggregate_trigger(short sink, bool added_data) {
   /* if last add failed, we should send the packet straightaway */
   /* TODO: send before full? */
-  PRINTF("publisher: new data for aggregation\n");
   if (!added_data) {
-    PRINTF("publisher: data adding failed - attempting to send\n");
+    PRINTF("publisher: packet probably full - attempting to send\n");
     on_aggregate_timer_expired(&sink);
   }
 
@@ -209,9 +215,6 @@ static void on_collect_timer_expired(void *tp) {
   } else {
     PRINTF("publisher: time for sensor %d, but not present, so skipping\n", t);
   }
-
-  PRINTF("publisher: resetting collection timer\n");
-  ctimer_reset(&collect[t]);
 }
 static void on_aggregate_timer_expired(void *sinkp) {
   static void *payloads[PUBSUB_MAX_SUBSCRIPTIONS];
@@ -227,7 +230,12 @@ static void on_aggregate_timer_expired(void *sinkp) {
     sub = find_subscription(sink, subid);
 
     if (is_active(sub)) {
-      if (hard_filter != NULL && hard_filter(&sub->in.hard)) continue;
+      PRINTF("publisher: subscription %d is active", subid);
+      if (hard_filter != NULL && hard_filter(&sub->in.hard)) {
+        PRINTF(", but hard filtered\n");
+        continue;
+      }
+      PRINTF("\n");
 
       num = extract_data(sink, subid, payloads);
       if (num == 0) {
