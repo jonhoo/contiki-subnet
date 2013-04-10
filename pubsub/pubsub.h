@@ -32,7 +32,7 @@
 #ifdef PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #define PUBSUB_MAX_SUBSCRIPTIONS PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #else
-#define PUBSUB_MAX_SUBSCRIPTIONS 32
+#define PUBSUB_MAX_SUBSCRIPTIONS 8
 #endif
 /*---------------------------------------------------------------------------*/
 struct sfilter {
