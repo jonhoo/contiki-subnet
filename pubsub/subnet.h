@@ -168,9 +168,10 @@ struct subnet_callbacks {
   enum existance (* exists)(struct subnet_conn *c, int sinkid, subid_t subid);
 
   /* should fill target with information about the given subscription and return
-   * the number of bytes written. It is up to this function to make sure the
-   * packet is not overfilled (by checking packetbuf_totlen()) */
-  dlen_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target);
+   * the number of bytes written. It is up to this function to make sure it
+   * does not write more than the given amount of bytes. If the function
+   * determines it cannot do with so few bytes, it should return 0 */
+  dlen_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target, dlen_t space);
 
   /* called when a sink has indicated that it is leaving for good. Should revoke
    * all subscriptions to this sink. Note that this sinkid may be reused in the

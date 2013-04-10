@@ -41,8 +41,6 @@ static const struct packetbuf_attrlist attributes[] = {
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink);
-static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink);
-static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink);
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto);
 static void broadcast(struct disclose_conn *c);
 static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid);
@@ -51,6 +49,8 @@ static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void clean_buffers(struct subnet_conn *c, struct sink *s);
+static void *inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *prev);
+static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops);
 
 static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from);
 static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from);
@@ -86,10 +86,7 @@ void subnet_open(struct subnet_conn *c,
 }
 
 void subnet_close(struct subnet_conn *c) {
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
+  prepare_packetbuf(SUBNET_PACKET_TYPE_LEAVING, &rimeaddr_node_addr, 0);
 
   /* TODO: perhaps do this multiple times for good measure? */
   broadcast(&c->pubsub);
@@ -114,22 +111,11 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
     s = &c->sinks[sinkid];
   }
 
-  uint16_t l = s->buflen;
-  dlen_t sz = sizeof(struct fragment) + bytes;
-  if (l + sz > PACKETBUF_SIZE) {
+  void *n = inject_packetbuf(subid, bytes, &s->fragments, &s->buflen, payload, s->buf+s->buflen);
+  if (n == NULL) {
     PRINTF("subnet: packet is full\n");
     return false;
   }
-
-  struct fragment *f = (struct fragment *) (s->buf+s->buflen);
-  f->subid = subid;
-  f->length = bytes;
-
-  s->buflen += sz;
-  s->fragments++;
-  memcpy(f+1, payload, bytes);
-
-  PRINTF("subnet: wrote %d bytes (%d data), bringing the total to %d\n", sz, bytes, s->buflen);
 
   return true;
 }
@@ -173,11 +159,8 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
     return;
   }
 
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, &s->sink));
+  prepare_packetbuf(SUBNET_PACKET_TYPE_PUBLISH, &s->sink, s->advertised_cost);
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &s->sink);
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
 
   PRINTF("subnet: publishing to %d.%d via %d.%d\n",
@@ -203,18 +186,8 @@ subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
 }
 
 void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dlen_t bytes) {
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, 1);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
-
-  struct fragment *f = packetbuf_dataptr();
-  f->subid = subid;
-  f->length = bytes;
-  f++;
-  memcpy(f, payload, bytes);
-  packetbuf_set_datalen(sizeof(struct fragment) + bytes);
+  prepare_packetbuf(SUBNET_PACKET_TYPE_SUBSCRIBE, &rimeaddr_node_addr, 0);
+  inject_packetbuf(subid, bytes, NULL, NULL, payload, NULL);
 
   if (!is_known(c, subnet_myid(c), subid)) {
     PRINTF("subnet: about to broadcast unknown subscription %d\n", subid);
@@ -227,16 +200,8 @@ void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dle
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
-  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, 0);
-
-  struct fragment *f = packetbuf_dataptr();
-  f->subid = subid;
-  f->length = 0;
-  packetbuf_set_datalen(sizeof(struct fragment));
+  prepare_packetbuf(SUBNET_PACKET_TYPE_UNSUBSCRIBE, &rimeaddr_node_addr, 0);
+  inject_packetbuf(subid, 0, NULL, NULL, NULL, NULL);
 
   PRINTF("subnet: unsubscribing from %d\n", subid);
   broadcast(&c->pubsub);
@@ -276,23 +241,6 @@ static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
   }
 
   return -1;
-}
-
-static struct sink *find_sink(struct subnet_conn *c, const rimeaddr_t *sink) {
-  int sinkid = find_sinkid(c, sink);
-  if (sinkid == -1) {
-    return NULL;
-  }
-  return &c->sinks[sinkid];
-}
-
-static uint8_t get_advertised_cost(struct subnet_conn *c, const rimeaddr_t *sink) {
-  struct sink *s = find_sink(c, sink);
-  if (s == NULL) {
-    return 0;
-  }
-
-  return s->advertised_cost;
 }
 
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto) {
@@ -401,9 +349,7 @@ static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid) {
 
 static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink) {
   /* this sink has been revoked, let neighbours know! */
-  packetbuf_clear();
-  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
-  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
+  prepare_packetbuf(SUBNET_PACKET_TYPE_LEAVING, sink, 0);
   broadcast(&c->pubsub);
 }
 
@@ -464,12 +410,9 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
         route = &c->sinks[replacesinkid];
       }
 
+      memset(route, 0, sizeof(struct sink));
       rimeaddr_copy(&route->sink, sink);
       route->advertised_cost = cost + 1;
-      route->numhops = 0;
-      route->buflen = 0;
-      route->fragments = 0;
-      route->revoked = 0;
     }
   }
 
@@ -639,24 +582,22 @@ static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
         unknown[i] = *(revoked+i);
       }
 
-      packetbuf_set_datalen(0);
-      frag = packetbuf_dataptr();
-      for (i = 0; i < p->unknown; i++) {
-        /* increase size by the size of a fragment header */
-        packetbuf_set_datalen(packetbuf_datalen() + sizeof(struct fragment));
+      prepare_packetbuf(SUBNET_PACKET_TYPE_REPLY, sink, s->advertised_cost);
 
+      frag = packetbuf_dataptr();
+      dlen_t sz = 0;
+      for (i = 0; i < p->unknown; i++) {
         /* set subid and write data to frag+1 (straight after header) */
         frag->subid = unknown[i];
-        frag->length = c->u->inform(c, sinkid, unknown[i], frag+1);
+        frag->length = c->u->inform(c, sinkid, unknown[i], frag+1, PACKETBUF_SIZE-sz-sizeof(struct fragment));
 
         if (frag->length == 0) {
           /* don't put an empty fragment in there */
-          packetbuf_set_datalen(packetbuf_datalen() - sizeof(struct fragment));
           continue;
         }
 
         /* update total length and number of included fragments */
-        packetbuf_set_datalen(packetbuf_datalen() + frag->length);
+        sz += frag->length;
         fragments++;
 
         /* write move pointer past written data */
@@ -664,8 +605,7 @@ static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
 
       }
 
-      packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_REPLY);
-      packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, sink));
+      packetbuf_set_datalen(sz);
       packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, fragments);
     }
 
@@ -745,6 +685,7 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       /* ask peer for clarification */
       short fragments = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS);
       struct peer_packet p = { 0, 0 };
+      dlen_t written = sizeof(struct peer_packet);
 
       subid_t revoked[fragments];
       subid_t unknown[fragments];
@@ -785,18 +726,16 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       }
 
       /* base attrs and length struct */
-      packetbuf_clear();
-      packetbuf_copyfrom(&p, sizeof(struct peer_packet));
-      packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_ASK);
-      packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
+      prepare_packetbuf(SUBNET_PACKET_TYPE_ASK, sink, 0);
+      memcpy(packetbuf_dataptr(), &p, sizeof(struct peer_packet));
 
       /* write revoked */
-      memcpy(packetbuf_dataptr() + packetbuf_datalen(), revoked, p.revoked * sizeof(subid_t));
-      packetbuf_set_datalen(packetbuf_datalen() + p.revoked * sizeof(subid_t));
+      memcpy(packetbuf_dataptr() + written, revoked, p.revoked * sizeof(subid_t));
+      written += p.revoked * sizeof(subid_t);
 
       /* write unknown */
-      memcpy(packetbuf_dataptr() + packetbuf_datalen(), unknown, p.unknown * sizeof(subid_t));
-      packetbuf_set_datalen(packetbuf_datalen() + p.unknown * sizeof(subid_t));
+      memcpy(packetbuf_dataptr() + written, unknown, p.unknown * sizeof(subid_t));
+      packetbuf_set_datalen(written + p.unknown * sizeof(subid_t));
 
       /* send and restore */
       /* TODO: Avoid congestion if all neighbours also send ask */
@@ -855,6 +794,69 @@ static void on_sent(struct disclose_conn *disclose, int status) {
   EACH_SINK_FRAGMENT(s,
     c->u->onsent(c, sinkid, subid);
   );
+}
+
+static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops) {
+  PRINTF("subnet: preparing packet for %d.%d\n", sink->u8[0], sink->u8[1]);
+
+  packetbuf_clear();
+  packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, type);
+  packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, 0);
+  packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
+  packetbuf_set_attr(PACKETBUF_ATTR_HOPS, hops);
+}
+
+static void * inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *prev) {
+  struct fragment *f = prev;
+  dlen_t sz = sizeof(struct fragment) + bytes;
+  dlen_t blen;
+  short frags;
+
+  PRINTF("subnet: writing %d bytes (%d data) for subid %d\n", sz, bytes, s->buflen, subid);
+
+  if (buflen == NULL) {
+    blen = packetbuf_datalen() + sz;
+  } else {
+    blen = *buflen + sz;
+  }
+
+  if (blen > PACKETBUF_SIZE) {
+    return NULL;
+  }
+
+  if (fragments == NULL) {
+    frags = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS) + 1;
+  } else {
+    frags = *fragments + 1;
+  }
+
+  if (f == NULL) {
+    f = packetbuf_dataptr();
+  }
+
+  f->subid = subid;
+  f->length = bytes;
+
+  if (bytes > 0 && payload != NULL) {
+    memcpy(f+1, payload, bytes);
+  }
+
+  if (fragments == NULL) {
+    packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, frags);
+  } else {
+    *fragments = frags;
+  }
+
+  if (buflen == NULL) {
+    packetbuf_set_datalen(blen);
+  } else {
+    *buflen = blen;
+  }
+
+  PRINTF("subnet: write successful, total now %d in %d fragments\n", blen, frags);
+
+  SKIPBYTES(f, struct fragment *, sz);
+  return f;
 }
 /*---------------------------------------------------------------------------*/
 /** @} */

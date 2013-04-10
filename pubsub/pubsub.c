@@ -30,7 +30,7 @@ static void on_onsent(struct subnet_conn *c, int sink, subid_t subid);
 static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid);
 static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid);
-static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target);
+static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target, dlen_t space);
 static void on_sink_left(struct subnet_conn *c, int sink);
 /*---------------------------------------------------------------------------*/
 /* private members */
@@ -242,10 +242,10 @@ static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid) 
   return sub_state(s);
 }
 
-static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target) {
+static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target, dlen_t space) {
   struct full_subscription *s = find_subscription(sink, subid);
 
-  if (packetbuf_datalen() + sizeof(struct subscription) > PACKETBUF_SIZE) {
+  if (space < sizeof(struct subscription)) {
     return 0;
   }
 
