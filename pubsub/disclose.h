@@ -44,7 +44,7 @@ struct disclose_conn {
 struct disclose_callbacks {
   void (* recv)(struct disclose_conn *c, const rimeaddr_t *from);
   void (* hear)(struct disclose_conn *c, const rimeaddr_t *from);
-  void (* sent)(struct disclose_conn *c, int status);
+  void (* sent)(struct disclose_conn *ptr, int status);
 };
 
 void disclose_open(struct disclose_conn *c, uint16_t channel,

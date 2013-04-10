@@ -8,7 +8,6 @@
  * \author Jon Gjengset <jon@tsp.io>
  */
 #include "lib/subscriber.h"
-#include "sys/ctimer.h"
 
 #define DEBUG 0
 #if DEBUG

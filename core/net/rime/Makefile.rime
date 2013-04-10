@@ -9,7 +9,7 @@ RIME_BASE      = rimeaddr.c rime.c timesynch.c \
 RIME_SINGLEHOP = broadcast.c stbroadcast.c unicast.c stunicast.c \
                  runicast.c abc.c \
                  rucb.c polite.c ipolite.c \
-                 disclose.c
+                 disclose.c adisclose.c
 RIME_MULTIHOP  = netflood.c multihop.c rmh.c trickle.c \
                  subnet.c
 RIME_MESH      = mesh.c route.c route-discovery.c
