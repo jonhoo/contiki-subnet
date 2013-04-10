@@ -20,7 +20,6 @@
 
 #include "net/rime/disclose.h"
 #include "net/rime/rimeaddr.h"
-#include <stddef.h>
 #include <stdbool.h>
 
 #ifdef SUBNET_CONF_MAX_SINKS
@@ -63,6 +62,7 @@
 
 
 typedef uint8_t subid_t;
+typedef uint8_t dlen_t;
 /*---------------------------------------------------------------------------*/
 /* private structs */
 /**
@@ -78,7 +78,7 @@ struct peer_packet {
  */
 struct fragment {
   subid_t subid;
-  size_t length;
+  dlen_t length;
 };
 
 /**
@@ -107,7 +107,7 @@ struct sink {
   struct sink_neighbor nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 
   short fragments;
-  size_t buflen;
+  dlen_t buflen;
   char buf[PACKETBUF_SIZE];
 
   clock_time_t revoked;
@@ -170,7 +170,7 @@ struct subnet_callbacks {
   /* should fill target with information about the given subscription and return
    * the number of bytes written. It is up to this function to make sure the
    * packet is not overfilled (by checking packetbuf_totlen()) */
-  size_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target);
+  dlen_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target);
 
   /* called when a sink has indicated that it is leaving for good. Should revoke
    * all subscriptions to this sink. Note that this sinkid may be reused in the
@@ -210,7 +210,7 @@ void subnet_close(struct subnet_conn *c);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes);
+bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, dlen_t bytes);
 
 /**
  * \brief Send publishe data packet
@@ -226,7 +226,7 @@ void subnet_publish(struct subnet_conn *c, int sinkid);
  * \param bytes Size of the subscription data
  * \return The subscription id of the new subscription
  */
-subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
+subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes);
 
 /**
  * \brief Send out a new subscription
@@ -235,7 +235,7 @@ subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes);
  * \param payload Where to read the subscription data from
  * \param bytes Size of the subscription data
  */
-void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes);
+void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dlen_t bytes);
 
 /**
  * \brief End the given subscription

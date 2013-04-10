@@ -42,7 +42,7 @@ void publisher_start(
  * \param t Supported reading type
  * \param sz Size of this reading type
  */
-void publisher_has(enum reading_type t, size_t sz);
+void publisher_has(enum reading_type t, dlen_t sz);
 
 /**
  * \brief Determine if readings are needed

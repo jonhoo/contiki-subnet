@@ -112,7 +112,7 @@ bool pubsub_next_subscription(struct full_subscription **prev);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool pubsub_add_data(int sinkid, subid_t subid, void *payload, size_t bytes);
+bool pubsub_add_data(int sinkid, subid_t subid, void *payload, dlen_t bytes);
 
 /**
  * \brief Send publishe data packet

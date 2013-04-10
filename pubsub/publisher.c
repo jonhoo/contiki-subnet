@@ -44,7 +44,7 @@ static struct ctimer aggregate[SUBNET_MAX_SINKS];
 static int is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
 
 static struct ctimer collect[PUBSUB_MAX_SENSORS];
-static size_t rsize[PUBSUB_MAX_SENSORS];
+static dlen_t rsize[PUBSUB_MAX_SENSORS];
 
 static bool needs[PUBSUB_MAX_SENSORS];
 static int numneeds;
@@ -91,7 +91,7 @@ void publisher_start(
     aggregate[i].etimer.p = PROCESS_NONE;
   }
 }
-void publisher_has(enum reading_type t, size_t sz) {
+void publisher_has(enum reading_type t, dlen_t sz) {
   rsize[t] = sz;
 }
 bool publisher_in_need() {

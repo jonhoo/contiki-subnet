@@ -97,7 +97,7 @@ void subnet_close(struct subnet_conn *c) {
   disclose_close(&c->peer);
 }
 
-bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
+bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, dlen_t bytes) {
   struct sink *s;
   PRINTF("subnet: adding data for %d:%d\n", sinkid, subid);
 
@@ -114,7 +114,7 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
   }
 
   uint16_t l = s->buflen;
-  size_t sz = sizeof(struct fragment) + bytes;
+  dlen_t sz = sizeof(struct fragment) + bytes;
   if (l + sz > PACKETBUF_SIZE) {
     PRINTF("subnet: packet is full\n");
     return false;
@@ -194,14 +194,14 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
   queuebuf_free(q);
 }
 
-subid_t subnet_subscribe(struct subnet_conn *c, void *payload, size_t bytes) {
+subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
   subid_t subid = c->subid;
   subnet_resubscribe(c, subid, payload, bytes);
   c->subid++;
   return subid;
 }
 
-void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, size_t bytes) {
+void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dlen_t bytes) {
   struct queuebuf *q = queuebuf_new_from_packetbuf();
 
   packetbuf_clear();
@@ -261,7 +261,7 @@ int subnet_myid(struct subnet_conn *c) {
 
 subid_t next_fragment(struct fragment **raw, void **payload) {
   subid_t subid = (*raw)->subid;
-  size_t length = (*raw)->length;
+  dlen_t length = (*raw)->length;
   /* move past subid + length */
   *raw = *raw + 1;
   /* we're now at the payload */
