@@ -173,9 +173,6 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
     return;
   }
 
-  /* preserve existing packetbuf */
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_PUBLISH);
   packetbuf_set_attr(PACKETBUF_ATTR_HOPS, get_advertised_cost(c, &s->sink));
@@ -189,10 +186,8 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
       );
   disclose_send(&c->pubsub, nexthop);
 
-  /* store publish packet and restore old packetbuf */
+  /* store publish packet */
   c->sentpacket = queuebuf_new_from_packetbuf();
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
 }
 
 subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
@@ -208,8 +203,6 @@ subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
 }
 
 void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dlen_t bytes) {
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_SUBSCRIBE);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, &rimeaddr_node_addr);
@@ -231,14 +224,9 @@ void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dle
     PRINTF("subnet: re-broadcasting subscription %d\n", subid);
     broadcast(&c->pubsub);
   }
-
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
 }
 
 void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
-
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_UNSUBSCRIBE);
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_ID, subid);
@@ -252,9 +240,6 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
 
   PRINTF("subnet: unsubscribing from %d\n", subid);
   broadcast(&c->pubsub);
-
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
 }
 
 int subnet_myid(struct subnet_conn *c) {
@@ -416,13 +401,10 @@ static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid) {
 
 static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink) {
   /* this sink has been revoked, let neighbours know! */
-  struct queuebuf *q = queuebuf_new_from_packetbuf();
   packetbuf_clear();
   packetbuf_set_attr(PACKETBUF_ATTR_EPACKET_TYPE, SUBNET_PACKET_TYPE_LEAVING);
   packetbuf_set_addr(PACKETBUF_ADDR_ERECEIVER, sink);
   broadcast(&c->pubsub);
-  queuebuf_to_packetbuf(q);
-  queuebuf_free(q);
 }
 
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink) {
@@ -762,7 +744,6 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
     {
       /* ask peer for clarification */
       short fragments = packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS);
-      struct queuebuf *q;
       struct peer_packet p = { 0, 0 };
 
       subid_t revoked[fragments];
@@ -803,9 +784,6 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
         return;
       }
 
-      /* store current packetbuf */
-      q = queuebuf_new_from_packetbuf();
-
       /* base attrs and length struct */
       packetbuf_clear();
       packetbuf_copyfrom(&p, sizeof(struct peer_packet));
@@ -823,8 +801,6 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       /* send and restore */
       /* TODO: Avoid congestion if all neighbours also send ask */
       disclose_send(&c->peer, from);
-      queuebuf_to_packetbuf(q);
-      queuebuf_free(q);
     }
   }
 }
