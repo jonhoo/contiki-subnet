@@ -72,7 +72,9 @@ void pubsub_init(struct pubsub_callbacks *u) {
   for (i = 0; i < SUBNET_MAX_SINKS; i++) {
     sinks[i].maxsub = 0;
     for (j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
-      sinks[i].subs[j].sink = -1;
+      sinks[i].subs[j].sink = i;
+      sinks[i].subs[j].subid = j;
+      sinks[i].subs[j].revoked = 1;
     }
   }
 
@@ -183,7 +185,7 @@ static void on_onsent(struct subnet_conn *c, int sink, subid_t subid) {
 }
 
 static enum existance sub_state(struct full_subscription *s) {
-  if (s->sink == -1) {
+  if (s->revoked == 1) {
     /* invalid (never started) subscription */
     return UNKNOWN;
   }
