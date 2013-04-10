@@ -42,7 +42,7 @@ static struct pubsub_callbacks callbacks = {
 };
 
 static struct ctimer aggregate[SUBNET_MAX_SINKS];
-static subid_t is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
+static short is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
 
 static struct ctimer collect[PUBSUB_MAX_SENSORS];
 static dlen_t rsize[PUBSUB_MAX_SENSORS];
