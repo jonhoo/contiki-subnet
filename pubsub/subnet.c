@@ -195,6 +195,11 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
 }
 
 subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
+  if (subnet_myid(c) == -1) {
+    PRINTF("subnet: injecting sink into sink table\n");
+    update_routes(c, &rimeaddr_node_addr, &rimeaddr_null);
+  }
+
   subid_t subid = c->subid;
   subnet_resubscribe(c, subid, payload, bytes);
   c->subid++;
