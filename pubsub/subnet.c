@@ -768,14 +768,20 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       subid_t unknown[fragments];
 
       int sinkid = find_sinkid(c, sink);
-      if (sinkid == -1) return;
-
-      if (c->sinks[sinkid].revoked != 0) {
-        notify_left(c, sink);
-        return;
+      if (sinkid != -1) {
+        if (c->sinks[sinkid].revoked != 0) {
+          PRINTF("subnet: sink in publish packet has left, notifying...\n");
+          notify_left(c, sink);
+          return;
+        }
       }
 
       EACH_PACKET_FRAGMENT(
+        if (sinkid == -1) {
+          unknown[p.unknown++] = subid;
+          continue;
+        }
+
         switch (c->u->exists(c, sinkid, subid)) {
         case REVOKED:
           revoked[p.revoked++] = subid;
