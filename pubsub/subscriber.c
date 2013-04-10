@@ -28,10 +28,11 @@ static void on_resubscribe(void *subidp);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void subscriber_start(void (*cb)(subid_t subid, void *data)) {
+  int i;
   on_reading = cb;
   pubsub_init(&callbacks);
 
-  for (int i = 0; i < PUBSUB_MAX_SUBSCRIPTIONS; i++) {
+  for (i = 0; i < PUBSUB_MAX_SUBSCRIPTIONS; i++) {
     is[i] = i;
   }
 }

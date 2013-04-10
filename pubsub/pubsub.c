@@ -58,10 +58,11 @@ bool is_active(struct full_subscription *s) {
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
+  int i, j;
   /* all subscriptions are unknown/invalid initially */
-  for (int i = 0; i < SUBNET_MAX_SINKS; i++) {
+  for (i = 0; i < SUBNET_MAX_SINKS; i++) {
     sinks[i].maxsub = 0;
-    for (int j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
+    for (j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
       sinks[i].subs[j].sink = -1;
     }
   }
@@ -237,7 +238,9 @@ static size_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *ta
 
 static void on_sink_left(struct subnet_conn *c, int sink) {
   struct sink_subscriptions s = sinks[sink];
-  for (subid_t i = 0; i <= s.maxsub; i++) {
+  subid_t i;
+
+  for (i = 0; i <= s.maxsub; i++) {
     if (s.subs[i].revoked == 0) {
       s.subs[i].revoked = clock_seconds();
     }

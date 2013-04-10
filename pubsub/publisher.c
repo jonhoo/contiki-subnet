@@ -95,7 +95,7 @@ bool publisher_needs(enum reading_type t) {
 }
 void publisher_publish(enum reading_type t, void *reading) {
   struct full_subscription *s = NULL;
-  bool added_data;
+  bool added_data = true;
   set_needs(t, false);
 
   while (pubsub_next_subscription(&s)) {

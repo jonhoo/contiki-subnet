@@ -259,7 +259,8 @@ const struct sink *subnet_sink(struct subnet_conn *c, int sinkid) {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
-  for (int i = 0; i < c->numsinks; i++) {
+  int i;
+  for (i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
       return i;
     }
