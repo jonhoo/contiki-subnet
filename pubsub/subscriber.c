@@ -10,6 +10,14 @@
 #include "lib/subscriber.h"
 #include "sys/ctimer.h"
 
+#define DEBUG 0
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static void on_ondata(int sink, subid_t subid, void *data);
@@ -39,7 +47,9 @@ void subscriber_start(void (*cb)(subid_t subid, void *data)) {
 }
 
 subid_t subscriber_subscribe(struct subscription *s) {
+  PRINTF("subscriber: adding new subscription\n");
   subid_t subid = pubsub_subscribe(s);
+  PRINTF("subscriber: got id %d, starting timer with interval %lu\n", subid, PUBSUB_RESEND_INTERVAL);
   ctimer_set(&resubscribe[subid], PUBSUB_RESEND_INTERVAL, &on_resubscribe, &is[subid]);
   return subid;
 }
@@ -48,6 +58,7 @@ subid_t subscriber_replace(subid_t subid, struct subscription *s) {
   return subscriber_subscribe(s);
 }
 void subscriber_unsubscribe(subid_t subid) {
+  PRINTF("subscriber: removing subscription %d, stopping timer\n", subid);
   ctimer_stop(&resubscribe[subid]);
   pubsub_unsubscribe(subid);
 }
@@ -73,11 +84,15 @@ void subscriber_close() {
 /* private function definitions */
 static void on_resubscribe(void *subidp) {
   int subid = *((int *)subidp);
+  PRINTF("subscriber: resubscribing to %d\n", subid);
   pubsub_resubscribe(subid);
   ctimer_restart(&resubscribe[subid]);
+  PRINTF("subscriber: timer reset\n");
 }
 static void on_ondata(int sink, subid_t subid, void *data) {
+  PRINTF("subscriber: got data for %d:%d\n", sink, subid);
   if (sink == pubsub_myid() && on_reading != NULL) {
+    PRINTF("subscriber: oh, it's for us!\n");
     on_reading(subid, data);
   }
 }

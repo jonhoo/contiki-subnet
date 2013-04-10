@@ -129,6 +129,8 @@ static void on_subscription(struct full_subscription *s) {
     PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c.etimer.timer.interval);
     ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
     on_collect_timer_expired(&s->in.sensor);
+  } else {
+    PRINTF("publisher: current interval %lu < subscription's %lu, ignoring\n", c.etimer.timer.interval, s->in.interval);
   }
 }
 static void on_unsubscription(struct full_subscription *old) {
@@ -155,9 +157,11 @@ static void on_unsubscription(struct full_subscription *old) {
     /* we have to set the interval to max for the check in on_subscription to
      * keep working */
     c.etimer.timer.interval = max;
+    PRINTF("publisher: no other subscriptions for this sensor, stopping timer\n");
     return;
   }
 
+  PRINTF("publisher: new sample interval is %lu\n", min);
   ctimer_set(&c, min, &on_collect_timer_expired, &s->in.sensor);
 }
 static void aggregate_trigger(int sink, bool added_data) {
@@ -172,7 +176,6 @@ static void aggregate_trigger(int sink, bool added_data) {
   if (ctimer_expired(&aggregate[sink])) {
     PRINTF("publisher: aggregation timer expired, restarting\n");
     ctimer_restart(&aggregate[sink]);
-    PRINTF("publisher: timer started\n");
   }
 }
 static void on_ondata(int sink, subid_t subid, void *data) {
@@ -207,6 +210,7 @@ static void on_collect_timer_expired(void *tp) {
     PRINTF("publisher: time for sensor %d, but not present, so skipping\n", t);
   }
 
+  PRINTF("publisher: resetting collection timer\n");
   ctimer_reset(&collect[t]);
 }
 static void on_aggregate_timer_expired(void *sinkp) {
