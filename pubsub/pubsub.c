@@ -95,7 +95,7 @@ bool pubsub_next_subscription(struct wsubscription *sub) {
 
   /* find next active subscription or the end */
   do {
-    if (sub->sink >= sinks[sub->sink].maxsub) {
+    if (sub->subid >= sinks[sub->sink].maxsub) {
       sub->sink++;
 
       if (sub->sink == SUBNET_MAX_SINKS) {
