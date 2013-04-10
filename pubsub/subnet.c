@@ -650,8 +650,10 @@ static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
   PRINTF("subnet: publish packet has %d fragments\n", packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS));
 
   EACH_PACKET_FRAGMENT(
-    PRINTF("subnet: %d bytes for %d\n", frag->length, subid);
-    c->u->ondata(c, sinkid, subid, payload);
+    if (frag->length > 0) {
+      PRINTF("subnet: %d bytes for %d\n", frag->length, subid);
+      c->u->ondata(c, sinkid, subid, payload);
+    }
   );
 }
 
