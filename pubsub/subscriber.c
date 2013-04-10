@@ -83,7 +83,7 @@ void subscriber_close() {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_resubscribe(void *subidp) {
-  int subid = *((int *)subidp);
+  subid_t subid = *((subid_t *)subidp);
   PRINTF("subscriber: resubscribing to %d\n", subid);
   pubsub_resubscribe(subid);
   ctimer_restart(&resubscribe[subid]);
