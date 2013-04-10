@@ -81,7 +81,7 @@ void subnet_open(struct subnet_conn *c,
   c->u = u;
   c->subid = 0;
   c->numsinks = 0;
-  c->writeout = false;
+  c->writeout = -1;
 }
 
 void subnet_close(struct subnet_conn *c) {
@@ -393,7 +393,9 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
     return NULL;
   }
 
-  return &n->node->addr;
+  PRINTF("subnet: next hop to try is %d.%d\n", next->node->addr.u8[0], next->node->addr.u8[1]);
+
+  return &next->node->addr;
 }
 
 static void broadcast(struct disclose_conn *c) {
@@ -492,9 +494,12 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
       PRINTF("subnet: max sinks limit hit\n");
       return;
     } else {
-      if (replacesinkid == -1) {
+      if (c->numsinks < SUBNET_MAX_SINKS) {
+        PRINTF("subnet: new sink node %d created for %d.%d\n", c->numsinks, sink->u8[0], sink->u8[1]);
         route = &c->sinks[c->numsinks];
+        c->numsinks++;
       } else {
+        PRINTF("subnet: old sink node %d replaced with %d.%d\n", replacesinkid, sink->u8[0], sink->u8[1]);
         route = &c->sinks[replacesinkid];
       }
 
@@ -776,6 +781,10 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       PRINTF("subnet: packet contains %d unknown and %d revoked subscriptions\n",
           p.unknown,
           p.revoked);
+
+      if (p.unknown == 0 && p.revoked == 0) {
+        return;
+      }
 
       /* store current packetbuf */
       q = queuebuf_new_from_packetbuf();

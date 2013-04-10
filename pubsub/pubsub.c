@@ -87,29 +87,32 @@ bool pubsub_next_subscription(struct full_subscription **sub) {
   int sink;
   subid_t subid;
 
+  if (*sub == NULL) {
+    /* start from beginning */
+    *sub = &sinks[0].subs[0];
+    sink = 0;
+    subid = 0;
+    if (is_active(*sub)) return true;
+  }
+
   /* find next active subscription or the end */
   do {
-    if (*sub == NULL) {
-      /* start from beginning */
-      *sub = &sinks[0].subs[0];
-      sink = 0;
-      subid = 0;
-    } else {
-      if (subid >= sinks[sink].maxsub) {
-        sink++;
+    sink = (*sub)->sink;
+    subid = (*sub)->subid;
+    if (subid >= sinks[sink].maxsub) {
+      sink++;
 
-        if (sink == SUBNET_MAX_SINKS) {
-          *sub = NULL;
-          return false;
-        }
-
-        subid = 0;
-      } else {
-        subid++;
+      if (sink == SUBNET_MAX_SINKS) {
+        *sub = NULL;
+        return false;
       }
 
-      *sub = &sinks[sink].subs[subid];
+      subid = 0;
+    } else {
+      subid++;
     }
+
+    *sub = &sinks[sink].subs[subid];
   } while (!is_active(*sub));
 
   return true;

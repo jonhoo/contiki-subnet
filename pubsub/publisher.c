@@ -217,10 +217,10 @@ static void on_aggregate_timer_expired(void *sinkp) {
   PRINTF("publisher: time to send out a data packet to sink %d\n", sink);
 
   pubsub_writeout(sink);
-  for (subid = 0; subid < maxsub; subid++) {
+  for (subid = 0; subid <= maxsub; subid++) {
     sub = find_subscription(sink, subid);
 
-    if (!is_active(sub)) {
+    if (is_active(sub)) {
       if (hard_filter != NULL && hard_filter(&sub->in.hard)) continue;
 
       num = extract_data(sub, payloads);
