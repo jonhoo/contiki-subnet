@@ -125,7 +125,7 @@ void publisher_publish(enum reading_type t, void *reading) {
 /* private function definitions */
 static void on_subscription(struct esubscription *s) {
   struct ctimer c = collect[s->in.sensor];
-  PRINTF("publisher: got new subscription for sink %d (id: %d, sensor: %d)\n", s->sink, s->subid, s->in.sensor);
+  PRINTF("publisher: got new subscription for sensor: %d\n", s->in.sensor);
   if (s->in.interval < c.etimer.timer.interval) {
     PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c.etimer.timer.interval);
     ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);

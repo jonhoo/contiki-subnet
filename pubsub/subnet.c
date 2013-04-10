@@ -813,7 +813,7 @@ static bool inject_packetbuf(subid_t subid, dlen_t bytes, uint8_t *fragments, dl
   dlen_t blen;
   uint8_t frags;
 
-  PRINTF("subnet: writing %d bytes (%d data) for subid %d\n", sz, bytes, s->buflen, subid);
+  PRINTF("subnet: writing %d bytes (%d data) for subid %d\n", sz, bytes, subid);
 
   if (buflen == NULL) {
     blen = packetbuf_datalen() + sz;
