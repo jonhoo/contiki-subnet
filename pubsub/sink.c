@@ -49,13 +49,13 @@ PROCESS_THREAD(sink_process, ev, data)
   s.aggregator.a = NO_AGGREGATION;
 
   /* subscribe to humidity */
-  s.interval = 20;
+  s.interval = 7*CLOCK_SECOND;
   s.sensor = READING_HUMIDITY;
   subscriber_subscribe(&s);
   printf("subscribed to humidity\n");
 
   /* subscribe to pressure */
-  s.interval = 40;
+  s.interval = 10*CLOCK_SECOND;
   s.sensor = READING_PRESSURE;
   subscriber_subscribe(&s);
   printf("subscribed to pressure\n");

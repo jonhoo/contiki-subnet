@@ -53,12 +53,12 @@ PROCESS_THREAD(van_process, ev, data)
   s.aggregator.a = NO_AGGREGATION;
 
   /* subscribe to humidity */
-  s.interval = 10;
+  s.interval = 10*CLOCK_SECOND;
   s.sensor = READING_HUMIDITY;
   subscriber_subscribe(&s);
 
   /* subscribe to pressure */
-  s.interval = 20;
+  s.interval = 20*CLOCK_SECOND;
   s.sensor = READING_PRESSURE;
   subscriber_subscribe(&s);
 
