@@ -301,11 +301,14 @@ const struct sink *subnet_sink(struct subnet_conn *c, int sinkid);
     subid_t subid;                                               \
     short fragments = FRAGMENTS;                                 \
     struct fragment *frag = (struct fragment *) BUF;             \
+    struct fragment *next = (struct fragment *) BUF;             \
     void *payload;                                               \
                                                                  \
     for (fragi = 0; fragi < fragments; fragi++) {                \
-      subid = next_fragment(&frag, &payload);                    \
-      BLOCK \
+      next_fragment(&next, &payload);                            \
+      subid = frag->subid;                                       \
+      BLOCK                                                      \
+      frag = next;                                               \
     } \
   }
 
