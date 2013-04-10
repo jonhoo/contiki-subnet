@@ -15,7 +15,6 @@ typedef struct locdouble pressure;
 /*---------------------------------------------------------------------------*/
 /* middleware types */
 enum reading_type {
-  READING_LOCATION,
   READING_HUMIDITY,
   READING_PRESSURE,
 };
