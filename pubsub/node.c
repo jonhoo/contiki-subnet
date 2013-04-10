@@ -7,60 +7,63 @@
  */
 
 #include "contiki.h"
-#include "lib/pubsub/publisher.h"
-#include "readings.h"
-#include <stdlib.h>
-/*---------------------------------------------------------------------------*/
-/**
- * \brief
- *          Handler for when a new subscription is registered
- * \param s
- *          The new subscription
- */
-static void on_subscription(struct subscription *s) {}
+#include "lib/publisher.h"
+#include "lib/random.h"
+#include "callbacks.c"
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
 AUTOSTART_PROCESSES(&node_process);
+static double rand(double max) {
+  return max * ((double)random_rand())/65535;
+}
+static humidity *get_humidity(struct location *l) {
+  static humidity h;
+  h.location.x = l->x;
+  h.location.y = l->y;
+  h.value = rand(100);
+  return &h;
+}
+static pressure *get_pressure(struct location *l) {
+  static pressure p;
+  p.location.x = l->x;
+  p.location.y = l->y;
+  p.value = rand(100);
+  return &p;
+}
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(node_process, ev, data)
 {
-  static struct publisher ps;
-  static struct location myloc = { 50, 50 };
+  static struct location l;
 
   PROCESS_BEGIN();
+  l.x = random_rand() % 100;
+  l.y = random_rand() % 100;
 
   // Initialize publisher
-  publisher_start(&ps, &on_subscription);
-
-  // Static properties
-  publisher_always_has(&ps, READING_LOCATION, &myloc, sizeof(struct location));
+  publisher_start(&soft_filter_proxy, NULL, NULL);
 
   // Dynamic properties
 #if HAS_HUMIDITY
-  publisher_has(&ps, READING_HUMIDITY, sizeof(double));
+  publisher_has(READING_HUMIDITY, sizeof(humidity));
 #endif
 #if HAS_PRESSURE
-  publisher_has(&ps, READING_PRESSURE, sizeof(double));
+  publisher_has(READING_PRESSURE, sizeof(pressure));
 #endif
 
   while(1) {
     // When data is needed, read and publish
-    PROCESS_WAIT_EVENT_UNTIL(publisher_in_need(&ps));
+    PROCESS_WAIT_EVENT_UNTIL(publisher_in_need());
 
     // Only read sensor if needed
-#if HAS_HUMIDITY
     // Humidity reading
-    if (publisher_needs(&ps, READING_HUMIDITY)) {
-      publisher_publish(&ps, READING_HUMIDITY, get_humidity());
+    if (publisher_needs(READING_HUMIDITY)) {
+      publisher_publish(READING_HUMIDITY, get_humidity(&l));
     }
-#endif
 
-#if HAS_PRESSURE
     // Pressure reading
-    if (publisher_needs(&ps, READING_PRESSURE)) {
-      publisher_publish(&ps, READING_PRESSURE, get_pressure());
+    if (publisher_needs(READING_PRESSURE)) {
+      publisher_publish(READING_PRESSURE, get_pressure(&l));
     }
-#endif
   }
 
   PROCESS_END();

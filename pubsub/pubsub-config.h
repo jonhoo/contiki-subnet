@@ -1,5 +1,17 @@
-#include "math.h"
-
+/*---------------------------------------------------------------------------*/
+/* sensor structs */
+struct location {
+  int x;
+  int y;
+};
+struct locdouble {
+  struct location location;
+  double value;
+};
+typedef struct locdouble humidity;
+typedef struct locdouble pressure;
+/*---------------------------------------------------------------------------*/
+/* middleware types */
 enum reading_type {
   READING_LOCATION,
   READING_HUMIDITY,
@@ -29,3 +41,4 @@ enum aggregator_t {
 union aggregator_arg {
   double distance;
 };
+/*---------------------------------------------------------------------------*/

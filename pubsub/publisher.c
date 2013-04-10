@@ -101,7 +101,7 @@ void publisher_publish(enum reading_type t, void *reading) {
   while (pubsub_next_subscription(&s)) {
     if (s->in.sensor == t) {
       /* don't add data if it doesn't pass the hard filter */
-      if (hard_filter(&s->in.hard)) continue;
+      if (hard_filter != NULL && hard_filter(&s->in.hard)) continue;
 
       if (!soft_filter(&s->in.soft, t, reading)) {
         added_data = pubsub_add_data(s->sink, s->subid, reading, rsize[t]);
@@ -192,14 +192,14 @@ static void on_aggregate_timer_expired(void *sinkp) {
   struct full_subscription *sub = NULL;
   int sink = *((int *)sinkp);
   int maxsub = last_subscription(sink);
-  int num, i;
+  int num, i, subid;
 
   pubsub_writeout(sink);
-  for (int subid = 0; subid < maxsub; subid++) {
+  for (subid = 0; subid < maxsub; subid++) {
     sub = find_subscription(sink, subid);
 
     if (!is_active(sub)) {
-      if (hard_filter(&sub->in.hard)) continue;
+      if (hard_filter != NULL && hard_filter(&sub->in.hard)) continue;
 
       num = extract_data(sub, payloads);
       if (num == 0) {
