@@ -102,12 +102,15 @@ void subnet_close(struct subnet_conn *c) {
 
 bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, size_t bytes) {
   struct sink *s;
+  PRINTF("subnet: adding data for %d:%d\n", sinkid, subid);
 
   if (sinkid >= c->numsinks) {
+    PRINTF("subnet: invalid sink id\n");
     return false;
   }
 
   if (c->writeout == sinkid) {
+    PRINTF("subnet: writing to writeout buffer!\n");
     s = &c->writesink;
   } else {
     s = &c->sinks[sinkid];
@@ -116,6 +119,7 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
   uint16_t l = s->buflen;
   size_t sz = sizeof(struct fragment) + bytes;
   if (l + sz > PACKETBUF_SIZE) {
+    PRINTF("subnet: packet is full\n");
     return false;
   }
 
@@ -127,10 +131,13 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
   s->fragments++;
   memcpy(f+1, payload, bytes);
 
+  PRINTF("subnet: wrote %d bytes (%d data), bringing the total to %d\n", sz, bytes, s->buflen);
+
   return true;
 }
 
 void subnet_writeout(struct subnet_conn *c, int sinkid) {
+  PRINTF("subnet: enabling writeout buffer\n");
   c->writeout = sinkid;
   c->writesink.fragments = 0;
   c->writesink.buflen = 0;
@@ -138,6 +145,7 @@ void subnet_writeout(struct subnet_conn *c, int sinkid) {
 
 void subnet_writein(struct subnet_conn *c) {
   struct sink *s;
+  PRINTF("subnet: disabling writeout buffer\n");
   if (c->writeout == -1) return;
 
   s = &c->sinks[c->writeout];
@@ -148,13 +156,19 @@ void subnet_writein(struct subnet_conn *c) {
 }
 
 void subnet_publish(struct subnet_conn *c, int sinkid) {
+  PRINTF("subnet: publish data\n");
+
   if (sinkid >= c->numsinks) {
+    PRINTF("subnet: invalid sink id\n");
     return;
   }
-  struct sink *s = &c->sinks[sinkid];
 
+  struct sink *s = &c->sinks[sinkid];
   const rimeaddr_t *nexthop = get_next_hop(c, s, NULL);
-  if (nexthop == NULL || adisclose_is_transmitting(&c->pubsub)) {
+
+  if (nexthop == NULL) {
+    PRINTF("subnet: no next hop known\n");
+
     if (c->u->errpub != NULL) {
       c->u->errpub(c);
     }
@@ -172,6 +186,10 @@ void subnet_publish(struct subnet_conn *c, int sinkid) {
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
 
   adisclose_send(&c->pubsub, nexthop);
+  PRINTF("subnet: publishing to %d.%d via %d.%d\n",
+      s->sink.u8[0], s->sink.u8[1],
+      nexthop->u8[0], nexthop->u8[1]
+      );
 
   /* store publish packet and restore old packetbuf */
   c->sentpacket = queuebuf_new_from_packetbuf();
@@ -203,9 +221,11 @@ void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, siz
   packetbuf_set_datalen(sizeof(struct fragment) + bytes);
 
   if (!is_known(c, subnet_myid(c), subid)) {
-    handle_subscriptions(c, &rimeaddr_node_addr, NULL);
+    PRINTF("subnet: about to broadcast unknown subscription %d\n", subid);
+    handle_subscriptions(c, &rimeaddr_node_addr, &rimeaddr_null);
     // handle_subscriptions will take care of the broadcast
   } else {
+    PRINTF("subnet: re-broadcasting subscription %d\n", subid);
     broadcast(&c->pubsub);
   }
 
@@ -227,6 +247,7 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
   f->length = 0;
   packetbuf_set_datalen(sizeof(struct fragment));
 
+  PRINTF("subnet: unsubscribing from %d\n", subid);
   broadcast(&c->pubsub);
 
   queuebuf_to_packetbuf(q);
@@ -295,10 +316,12 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   struct sink_neighbor *this;
 
   if (route == NULL) {
+    PRINTF("subnet: cannot find next hop to unspecified sink\n");
     return NULL;
   }
 
   if (route->revoked > 0 && clock_seconds() - route->revoked > SUBNET_REVOKE_PERIOD) {
+    PRINTF("subnet: sink revoked, pretending there is no known next hop\n");
     return NULL;
   }
 
@@ -306,6 +329,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   if (prevto != NULL) {
     for (i = 0; i < route->numhops; i++) {
       if (rimeaddr_cmp(&route->nexthops[i].node->addr, prevto)) {
+        PRINTF("subnet: found previous next hop neighbour entry\n");
         previ = i;
         n = &route->nexthops[i];
         break;
@@ -313,19 +337,30 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
     }
   }
 
+  PRINTF("subnet: determining best next hop:");
+
   /* find next most expensive route after n */
   next = n;
   for (i = 0; i < route->numhops; i++) {
     this = &route->nexthops[i];
 
+    PRINTF("\n        %d.%d is: ", this->node->addr.u8[0], this->node->addr.u8[1]);
+
     /* previous hop can't be next hop */
     if (this == n) continue;
+    printf("not-n ");
 
     if (n != NULL) {
+      PRINTF("limited ");
+
       /* next hop can't be better than previous hop */
       if (this->cost < n->cost) continue;
+      PRINTF("worse-n ");
+
       /* nor can it be same cost and before */
       if (this->cost == n->cost && i < previ) continue;
+
+      PRINTF("after-n ");
     }
 
     /* any node that get's here is valid, so pick the best */
@@ -336,19 +371,28 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
       continue;
     }
 
+    PRINTF("competing ");
+
     /* if this is more expensive, don't use it */
     if (this->cost > next->cost) continue;
 
+    PRINTF("equal-or-better ");
+
     /* if this is same cost and later, don't use it */
     if (this->cost == next->cost && i > nexti) continue;
+
+    PRINTF("and not same-but-later!");
 
     /* here, it's either cheaper or earlier, so it's the best */
     next = this;
     nexti = i;
   }
 
+  PRINTF("\n");
+
   if (next == n || next == NULL) {
     /* no next route found */
+    PRINTF("subnet: no next hop =(\n");
     return NULL;
   }
 
@@ -433,15 +477,18 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   }
 
   n->last_active = clock_seconds();
+  PRINTF("subnet: updating routing table\n");
 
   /* find route to sink */
   for (i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
       route = &c->sinks[i];
+      PRINTF("subnet: found sink @ %d\n", i);
     }
     if (replacesinkid == -1 &&
         c->sinks[i].revoked > 0 &&
         clock_seconds() - c->sinks[i].revoked > SUBNET_REVOKE_PERIOD) {
+      PRINTF("subnet: found revoked sink %d\n", i);
       replacesinkid = i;
     }
   }
@@ -449,8 +496,7 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   /* create sink node if not found */
   if (route == NULL) {
     if (replacesinkid == -1 && c->numsinks >= SUBNET_MAX_SINKS) {
-      PRINTF("%d.%d: subnet: max sinks limit hit\n",
-          rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
+      PRINTF("subnet: max sinks limit hit\n");
       return;
     } else {
       if (replacesinkid == -1) {
@@ -504,6 +550,7 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   bool subscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE);
 
   if (c->u->exists == NULL) {
+    PRINTF("subnet: no exists function in callbacks, giving up...\n");
     return;
   }
 
@@ -512,6 +559,7 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
 
   EACH_PACKET_FRAGMENT(
     if (!is_known(c, sinkid, subid) == subscribe) {
+      PRINTF("subnet: subscription %d has changed in packet, forwarding...\n", subid);
       /* something changed, send new subscription to neighbours */
       broadcast(&c->pubsub);
       break;
@@ -519,14 +567,17 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   );
 
   if (c->u->subscribe == NULL) {
+    PRINTF("subnet: no subscribe function in callbacks, giving up...\n");
     return;
   }
 
   EACH_PACKET_FRAGMENT(
     if (!is_known(c, sinkid, subid) == subscribe) {
       if (subscribe) {
+        PRINTF("subnet: packet contained new subscription %d\n", subid);
         c->u->subscribe(c, sinkid, subid, payload);
       } else {
+        PRINTF("subnet: packet contained unsubscription for %d\n", subid);
         c->u->unsubscribe(c, sinkid, subid);
       }
     }
@@ -553,6 +604,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_ASK) {
+    PRINTF("subnet: heard peer ask packet from %d.%d\n", from->u8[0], from->u8[1]);
     if (c->u->inform == NULL) {
       return;
     }
@@ -630,8 +682,10 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     adisclose_send(&c->peer, from);
 
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
+    PRINTF("subnet: heard peer reply packet from %d.%d\n", from->u8[0], from->u8[1]);
     handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_LEAVING) {
+    PRINTF("subnet: heard peer leaving packet from %d.%d\n", from->u8[0], from->u8[1]);
     handle_leaving(c, sink);
   }
 }
@@ -647,6 +701,7 @@ static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   int sinkid;
   struct sink *s;
 
+  PRINTF("subnet: got publish packet from downstream node %d.%d\n", from->u8[0], from->u8[1]);
   if (c->u->ondata == NULL) {
     return;
   }
@@ -660,7 +715,10 @@ static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
     return;
   }
 
+  PRINTF("subnet: publish packet has %d fragments\n", packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS));
+
   EACH_PACKET_FRAGMENT(
+    PRINTF("subnet: %d bytes for %d\n", frag->length, subid);
     c->u->ondata(c, sinkid, subid, payload);
   );
 }
@@ -676,14 +734,19 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE) {
+    PRINTF("subnet: heard subscribe packet from %d.%d\n", from->u8[0], from->u8[1]);
     handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_LEAVING) {
+    PRINTF("subnet: heard leaving packet from %d.%d\n", from->u8[0], from->u8[1]);
     handle_leaving(c, sink);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_UNSUBSCRIBE) {
+    PRINTF("subnet: heard unsubscribe packet from %d.%d\n", from->u8[0], from->u8[1]);
     handle_subscriptions(c, sink, from);
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_PUBLISH) {
 
+    PRINTF("subnet: heard publish packet from %d.%d\n", from->u8[0], from->u8[1]);
     if (c->u->exists == NULL) {
+      PRINTF("subnet: no exists function in callback, ignoring...\n");
       return;
     }
 
@@ -716,6 +779,10 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from, ui
           break;
         }
       );
+
+      PRINTF("subnet: packet contains %d unknown and %d revoked subscriptions\n",
+          p.unknown,
+          p.revoked);
 
       /* store current packetbuf */
       q = queuebuf_new_from_packetbuf();

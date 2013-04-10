@@ -22,12 +22,6 @@
 #include <stdbool.h>
 #include "pubsub-config.h"
 /*---------------------------------------------------------------------------*/
-#if DEBUG
-#include <stdio.h>
-#define PRINTF(...) printf(__VA_ARGS__)
-#else
-#define PRINTF(...)
-#endif
 
 #ifdef PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #define PUBSUB_MAX_SUBSCRIPTIONS PUBSUB_CONF_MAX_SUBSCRIPTIONS

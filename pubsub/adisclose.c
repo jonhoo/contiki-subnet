@@ -42,17 +42,14 @@ recv_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
 {
   struct adisclose_conn *c = (struct adisclose_conn *)disclose;
 
-  PRINTF("%d.%d: adisclose: recv_from_disclose from %d.%d type %d seqno %d\n",
-         rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
+  PRINTF("adisclose: recv_from_disclose from %d.%d type %d seqno %d\n",
          from->u8[0], from->u8[1],
          packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE),
          packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
 
-  if (packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) ==
-     PACKETBUF_ATTR_PACKET_TYPE_ACK) {
+  if (packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) == PACKETBUF_ATTR_PACKET_TYPE_ACK) {
 
-    PRINTF("%d.%d: adisclose: got ACK from %d.%d, seqno %d (%d)\n",
-       rimeaddr_node_addr.u8[0], rimeaddr_node_addr.u8[1],
+    PRINTF("adisclose: got ACK from %d.%d, seqno %d (%d)\n",
        from->u8[0], from->u8[1],
        packetbuf_attr(PACKETBUF_ATTR_PACKET_ID),
        c->sndnxt);
@@ -65,38 +62,30 @@ recv_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
       }
 
       RIMESTATS_ADD(ackrx);
-      PRINTF("%d.%d: adisclose: ACKed %d\n",
-             rimeaddr_node_addr.u8[0], rimeaddr_node_addr.u8[1],
-             packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
+      PRINTF("adisclose: ACKed %d\n", packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
       c->sndnxt = (c->sndnxt + 1) % (1 << ADISCLOSE_PACKET_ID_BITS);
       c->is_tx = 0;
-      if(c->u->sent != NULL) {
+      if (c->u->sent != NULL) {
         c->u->sent(c, &c->receiver);
       }
     } else {
-      PRINTF("%d.%d: adisclose: received bad ACK %d for %d\n",
-             rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
+      PRINTF("adisclose: received bad ACK %d for %d\n",
              packetbuf_attr(PACKETBUF_ATTR_PACKET_ID),
              c->sndnxt);
       RIMESTATS_ADD(badackrx);
     }
-  } else if(packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) ==
-            PACKETBUF_ATTR_PACKET_TYPE_DATA) {
+  } else if (packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) == PACKETBUF_ATTR_PACKET_TYPE_DATA) {
     uint16_t packet_seqno;
     struct queuebuf *q;
 
     RIMESTATS_ADD(reliablerx);
 
-    PRINTF("%d.%d: adisclose: got packet %d\n",
-           rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
-           packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
-
     packet_seqno = packetbuf_attr(PACKETBUF_ATTR_PACKET_ID);
+    PRINTF("adisclose: got packet %d\n", packet_seqno);
 
     q = queuebuf_new_from_packetbuf();
     if (q != NULL) {
-      PRINTF("%d.%d: adisclose: Sending ACK to %d.%d for %d\n",
-             rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
+      PRINTF("adisclose: sending ACK to %d.%d for %d\n",
              from->u8[0], from->u8[1],
              packet_seqno);
       packetbuf_clear();
@@ -108,13 +97,12 @@ recv_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
       queuebuf_to_packetbuf(q);
       queuebuf_free(q);
     } else {
-      PRINTF("%d.%d: adisclose: could not send ACK to %d.%d for %d: no queued buffers\n",
-             rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
+      PRINTF("adisclose: could not send ACK to %d.%d for %d: no queued buffers\n",
              from->u8[0], from->u8[1],
              packet_seqno);
     }
 
-    if(c->u->recv != NULL) {
+    if (c->u->recv != NULL) {
       c->u->recv(c, from, packet_seqno);
     }
   }
@@ -128,9 +116,7 @@ timeout(void *ptr)
   c->is_tx = 0;
   RIMESTATS_ADD(timedout);
 
-  PRINTF("%d.%d: adisclose: packet %d timed out\n",
-         rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
-         c->sndnxt);
+  PRINTF("adisclose: packet %d timed out\n", c->sndnxt);
   c->sndnxt = (c->sndnxt + 1) % (1 << ADISCLOSE_PACKET_ID_BITS);
 
   if(c->u->timedout) {
@@ -143,10 +129,9 @@ hear_from_disclose(struct disclose_conn *disclose, const rimeaddr_t *from)
 {
   struct adisclose_conn *c = (struct adisclose_conn *)disclose;
 
-  if(packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) ==
-	    PACKETBUF_ATTR_PACKET_TYPE_DATA) {
+  if (packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) == PACKETBUF_ATTR_PACKET_TYPE_DATA) {
 
-    if(c->u->hear != NULL) {
+    if (c->u->hear != NULL) {
       c->u->hear(c, from, packetbuf_attr(PACKETBUF_ATTR_PACKET_ID));
     }
   }
@@ -183,8 +168,7 @@ adisclose_send(struct adisclose_conn *c, const rimeaddr_t *receiver)
 {
   int ret;
   if(adisclose_is_transmitting(c)) {
-    PRINTF("%d.%d: adisclose: already transmitting\n",
-        rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
+    PRINTF("adisclose: already transmitting\n");
     return 0;
   }
 
@@ -195,9 +179,7 @@ adisclose_send(struct adisclose_conn *c, const rimeaddr_t *receiver)
   packetbuf_set_attr(PACKETBUF_ATTR_PACKET_ID, c->sndnxt);
   c->is_tx = 1;
   RIMESTATS_ADD(reliabletx);
-  PRINTF("%d.%d: adisclose: sending packet %d\n",
-	 rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1],
-	 c->sndnxt);
+  PRINTF("adisclose: sending packet %d\n", c->sndnxt);
   ret = disclose_send(&c->c, receiver);
   if(!ret) {
     c->is_tx = 0;

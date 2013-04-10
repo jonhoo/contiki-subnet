@@ -10,6 +10,13 @@
 #include "lib/publisher.h"
 #include "sys/ctimer.h"
 
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static void on_errpub();
@@ -66,7 +73,7 @@ void publisher_start(
     rsize[i] = 0;
     needs[i] = false;
 
-    /* make sure we will chos eany period over this one */
+    /* make sure we will chose any period over this one */
     collect[i].etimer.timer.interval = max;
   }
 
@@ -115,13 +122,16 @@ void publisher_publish(enum reading_type t, void *reading) {
 /* private function definitions */
 static void on_subscription(struct full_subscription *s) {
   struct ctimer c = collect[s->in.sensor];
+  PRINTF("publisher: got new subscription for sink %d (id: %d, sensor: %d)\n", s->sink, s->subid, s->in.sensor);
   if (s->in.interval < c.etimer.timer.interval) {
+    PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c.etimer.timer.interval);
     ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
   }
 }
 static void on_unsubscription(struct full_subscription *old) {
   struct full_subscription *s = NULL;
   struct ctimer c = collect[s->in.sensor];
+  PRINTF("publisher: removing subscription for sink %d (id: %d, sensor: %d)\n", s->sink, s->subid, s->in.sensor);
   ctimer_stop(&c);
   clock_time_t max = ~0;
   clock_time_t min = max;
@@ -150,15 +160,21 @@ static void on_unsubscription(struct full_subscription *old) {
 static void aggregate_trigger(int sink, bool added_data) {
   /* if last add failed, we should send the packet straightaway */
   /* TODO: send before full? */
+  PRINTF("publisher: new data for aggregation\n");
   if (!added_data) {
+    PRINTF("publisher: data adding failed - attempting to send\n");
     on_aggregate_timer_expired(&sink);
   }
 
   if (ctimer_expired(&aggregate[sink])) {
+    PRINTF("publisher: aggregation timer expired, restarting\n");
     ctimer_restart(&aggregate[sink]);
+    PRINTF("publisher: timer started\n");
   }
 }
 static void on_ondata(int sink, subid_t subid, void *data) {
+  PRINTF("publisher: heard data from upstream - adding\n");
+
   struct full_subscription *s = find_subscription(sink, subid);
   bool added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
   aggregate_trigger(sink, added_data);
@@ -181,8 +197,11 @@ static void set_needs(enum reading_type t, bool need) {
 static void on_collect_timer_expired(void *tp) {
   enum reading_type t = *((enum reading_type *)tp);
   if (rsize[t] != 0) {
+    PRINTF("publisher: collecting time for sensor %d\n", t);
     set_needs(t, true);
     process_post(etarget, PROCESS_EVENT_PUBLISH, tp);
+  } else {
+    PRINTF("publisher: time for sensor %d, but not present, so skipping\n", t);
   }
 
   ctimer_reset(&collect[t]);
@@ -194,6 +213,8 @@ static void on_aggregate_timer_expired(void *sinkp) {
   int maxsub = last_subscription(sink);
   int num, i, subid;
 
+  PRINTF("publisher: time to send out a data packet to sink %d\n", sink);
+
   pubsub_writeout(sink);
   for (subid = 0; subid < maxsub; subid++) {
     sub = find_subscription(sink, subid);
@@ -203,14 +224,17 @@ static void on_aggregate_timer_expired(void *sinkp) {
 
       num = extract_data(sub, payloads);
       if (num == 0) {
+        PRINTF("publisher: no data for subscription %d, adding\n", subid);
         pubsub_add_data(sink, subid, NULL, 0);
       } else if (aggregator == NULL) {
+        PRINTF("publisher: no aggregator for subscription %d, adding all %d\n", subid, num);
         for (i = 0; i < num; i++) {
           /* it is safe to use rsize[t] here because we know received values
            * won't have been aggregated either */
           pubsub_add_data(sink, subid, payloads[i], rsize[sub->in.sensor]);
         }
       } else {
+        PRINTF("publisher: calling aggregator for %d values in subscription %d\n", num, subid);
         aggregator(&sub->in.aggregator, sub, num, payloads);
         /* aggregator will call pubsub_add_data(sink, subid, ...) */
       }

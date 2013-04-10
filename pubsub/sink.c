@@ -19,6 +19,7 @@ static int numreadings = 0;
 
 static void on_reading(subid_t subid, void *data) {
   memcpy(&readings[numreadings%5][subid], data, sizeof(struct locdouble));
+  printf("got reading for subscription %d\n", subid);
   numreadings++;
 }
 /*---------------------------------------------------------------------------*/
@@ -51,11 +52,13 @@ PROCESS_THREAD(sink_process, ev, data)
   s.interval = 20;
   s.sensor = READING_HUMIDITY;
   subscriber_subscribe(&s);
+  printf("subscribed to humidity\n");
 
   /* subscribe to pressure */
   s.interval = 40;
   s.sensor = READING_PRESSURE;
   subscriber_subscribe(&s);
+  printf("subscribed to pressure\n");
 
   while(1) {
     etimer_set(&et, CLOCK_SECOND);
@@ -67,10 +70,10 @@ PROCESS_THREAD(sink_process, ev, data)
       pressure p = readings[i][1];
 
       if (h.value != -1) {
-        printf("Node at <%03d, %03d> has humidity %.2f\n", h.location.x, h.location.y, h.value);
+        printf("Node at <%03d, %03d> has humidity ~%d\n", h.location.x, h.location.y, (int)h.value);
       }
       if (p.value != -1) {
-        printf("Node at <%03d, %03d> has pressure %.2f\n", p.location.x, p.location.y, p.value);
+        printf("Node at <%03d, %03d> has pressure ~%d\n", p.location.x, p.location.y, (int)p.value);
       }
     }
 

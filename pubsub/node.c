@@ -9,6 +9,7 @@
 #include "contiki.h"
 #include "lib/publisher.h"
 #include "lib/random.h"
+#include <stdio.h>
 #include "callbacks.c"
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
@@ -21,6 +22,7 @@ static humidity *get_humidity(struct location *l) {
   h.location.x = l->x;
   h.location.y = l->y;
   h.value = r(100);
+  printf("reading humidity = %d\n", (int)h.value);
   return &h;
 }
 static pressure *get_pressure(struct location *l) {
@@ -28,6 +30,7 @@ static pressure *get_pressure(struct location *l) {
   p.location.x = l->x;
   p.location.y = l->y;
   p.value = r(100);
+  printf("reading pressure = %d\n", (int)p.value);
   return &p;
 }
 /*---------------------------------------------------------------------------*/
@@ -38,30 +41,30 @@ PROCESS_THREAD(node_process, ev, data)
   PROCESS_BEGIN();
   l.x = random_rand() % 100;
   l.y = random_rand() % 100;
+  printf("initialized location to <%03d, %03d>\n", l.x, l.y);
 
   // Initialize publisher
   publisher_start(&soft_filter_proxy, NULL, NULL);
 
   // Dynamic properties
-#if HAS_HUMIDITY
   publisher_has(READING_HUMIDITY, sizeof(humidity));
-#endif
-#if HAS_PRESSURE
   publisher_has(READING_PRESSURE, sizeof(pressure));
-#endif
 
   while(1) {
     // When data is needed, read and publish
     PROCESS_WAIT_EVENT_UNTIL(publisher_in_need());
+    printf("sink needs something\n");
 
     // Only read sensor if needed
     // Humidity reading
     if (publisher_needs(READING_HUMIDITY)) {
+      printf("sink needs humidity\n");
       publisher_publish(READING_HUMIDITY, get_humidity(&l));
     }
 
     // Pressure reading
     if (publisher_needs(READING_PRESSURE)) {
+      printf("sink needs pressure\n");
       publisher_publish(READING_PRESSURE, get_pressure(&l));
     }
   }

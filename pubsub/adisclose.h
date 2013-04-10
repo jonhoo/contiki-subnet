@@ -31,7 +31,7 @@
  *         Jon Gjengset <jon@tsp.io>
  */
 
-#ifndef __ADISCLOE_H__
+#ifndef __ADISCLOSE_H__
 #define __ADISCLOSE_H__
 
 #include "sys/ctimer.h"

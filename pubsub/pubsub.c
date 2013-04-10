@@ -9,7 +9,16 @@
  */
 
 #include "lib/pubsub.h"
+#include "sys/ctimer.h"
 #include <string.h>
+
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static enum existance sub_state(struct full_subscription *s);
@@ -134,8 +143,10 @@ int extract_data(struct full_subscription *sub, void *payloads[]) {
   int num = 0;
 
   EACH_SINK_FRAGMENT(s,
+    PRINTF("pubsub: hit value for %d with size %d\n", subid, frag->length);
     if (subid != sub->subid) continue;
     if (frag->length == 0) continue;
+    PRINTF("pubsub: extracted.\n");
     payloads[num] = payload;
     num++;
   );
