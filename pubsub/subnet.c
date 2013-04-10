@@ -276,6 +276,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   PRINTF("subnet: determining best next hop:");
 
   /* find next most expensive route after n */
+  /* TODO: use last_active here */
   next = n;
   for (i = 0; i < route->numhops; i++) {
     this = &route->nexthops[i];
