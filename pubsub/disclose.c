@@ -52,7 +52,9 @@ static void
 sent_by_broadcast(struct broadcast_conn *broadcast, int status, int num_tx)
 {
   struct disclose_conn *c = (struct disclose_conn *)broadcast;
+#if DEBUG
   const rimeaddr_t *to = packetbuf_addr(PACKETBUF_ADDR_RECEIVER);
+#endif
 
   PRINTF("disclose: sent_by_broadcast, receiver %d.%d\n",
       to->u8[0], to->u8[1]);

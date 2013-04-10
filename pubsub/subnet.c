@@ -336,7 +336,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
 
     /* previous hop can't be next hop */
     if (this == n) continue;
-    printf("not-n ");
+    PRINTF("not-n ");
 
     if (n != NULL) {
       PRINTF("limited ");
