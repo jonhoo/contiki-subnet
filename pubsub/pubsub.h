@@ -22,7 +22,6 @@
 #include <stdbool.h>
 #include "pubsub-config.h"
 /*---------------------------------------------------------------------------*/
-
 #ifdef PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #define PUBSUB_MAX_SUBSCRIPTIONS PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #else

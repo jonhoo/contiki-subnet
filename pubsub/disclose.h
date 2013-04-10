@@ -31,7 +31,6 @@
 #ifndef __DISCLOSE_H__
 #define __DISCLOSE_H__
 
-
 #include "net/rime/broadcast.h"
 
 #define DISCLOSE_ATTRIBUTES   { PACKETBUF_ADDR_RECEIVER, PACKETBUF_ADDRSIZE }, \
