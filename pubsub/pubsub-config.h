@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------*/
 /* sensor structs */
 struct location {
-  int x;
-  int y;
+  short x;
+  short y;
 };
 struct locdouble {
   struct location location;
@@ -19,7 +19,7 @@ enum reading_type {
 };
 
 enum soft_filter  {
-  SOFT_FILTER_1
+  NO_SOFT_FILTER
 };
 
 union soft_arg {
@@ -27,7 +27,7 @@ union soft_arg {
 };
 
 enum hard_filter {
-  HARD_FILTER_1
+  NO_HARD_FILTER
 };
 
 union hard_arg {
@@ -35,7 +35,7 @@ union hard_arg {
 };
 
 enum aggregator_t {
-  AGGREGATOR_1
+  NO_AGGREGATION
 };
 
 union aggregator_arg {
