@@ -69,7 +69,7 @@ const struct subscription *subscriber_subscription(subid_t subid) {
     return NULL;
   }
 
-  struct full_subscription *s = find_subscription(mysinkid, subid);
+  struct esubscription *s = find_subscription(mysinkid, subid);
   if (s == NULL) {
     return NULL;
   }

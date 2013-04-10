@@ -22,7 +22,7 @@
 
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static enum existance sub_state(struct full_subscription *s);
+static enum existance sub_state(struct esubscription *s);
 
 static void on_errpub(struct subnet_conn *c);
 static void on_ondata(struct subnet_conn *c, short sink, subid_t subid, void *data);
@@ -36,7 +36,7 @@ static void on_sink_left(struct subnet_conn *c, short sink);
 /* private members */
 struct sink_subscriptions {
   subid_t maxsub;
-  struct full_subscription subs[PUBSUB_MAX_SUBSCRIPTIONS];
+  struct esubscription subs[PUBSUB_MAX_SUBSCRIPTIONS];
 };
 static struct sink_subscriptions sinks[SUBNET_MAX_SINKS];
 static struct pubsub_state state;
@@ -52,7 +52,7 @@ static struct subnet_callbacks su = {
 };
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
-struct full_subscription * find_subscription(short sink, subid_t subid) {
+struct esubscription * find_subscription(short sink, subid_t subid) {
   return &sinks[sink].subs[subid];
 }
 
@@ -60,7 +60,7 @@ subid_t last_subscription(short sink) {
   return sinks[sink].maxsub;
 }
 
-bool is_active(struct full_subscription *s) {
+bool is_active(struct esubscription *s) {
   if (s == NULL) {
     return false;
   }
@@ -73,8 +73,6 @@ void pubsub_init(struct pubsub_callbacks *u) {
   for (i = 0; i < SUBNET_MAX_SINKS; i++) {
     sinks[i].maxsub = 0;
     for (j = 0; j < PUBSUB_MAX_SUBSCRIPTIONS; j++) {
-      sinks[i].subs[j].sink = i;
-      sinks[i].subs[j].subid = j;
       sinks[i].subs[j].revoked = 1;
     }
   }
@@ -86,37 +84,31 @@ void pubsub_init(struct pubsub_callbacks *u) {
   subnet_open(&state.c, 14159, 26535, &su);
 }
 
-bool pubsub_next_subscription(struct full_subscription **sub) {
-  short sink;
-  subid_t subid;
-
-  if (*sub == NULL) {
+bool pubsub_next_subscription(struct wsubscription *sub) {
+  if (sub->sink == -1) {
     /* start from beginning */
-    *sub = &sinks[0].subs[0];
-    sink = 0;
-    subid = 0;
-    if (is_active(*sub)) return true;
+    sub->esub = &sinks[0].subs[0];
+    sub->sink = 0;
+    sub->subid = 0;
+    if (is_active(sub->esub)) return true;
   }
 
   /* find next active subscription or the end */
   do {
-    sink = (*sub)->sink;
-    subid = (*sub)->subid;
-    if (subid >= sinks[sink].maxsub) {
-      sink++;
+    if (sub->sink >= sinks[sub->sink].maxsub) {
+      sub->sink++;
 
-      if (sink == SUBNET_MAX_SINKS) {
-        *sub = NULL;
+      if (sub->sink == SUBNET_MAX_SINKS) {
         return false;
       }
 
-      subid = 0;
+      sub->subid = 0;
     } else {
-      subid++;
+      sub->subid++;
     }
 
-    *sub = &sinks[sink].subs[subid];
-  } while (!is_active(*sub));
+    sub->esub = &sinks[sub->sink].subs[sub->subid];
+  } while (!is_active(sub->esub));
 
   return true;
 }
@@ -143,14 +135,14 @@ short pubsub_myid() {
 void pubsub_close() {
   subnet_close(&state.c);
 }
-uint8_t extract_data(struct full_subscription *sub, void *payloads[]) {
+uint8_t extract_data(short sink, subid_t sid, void *payloads[]) {
   /* TODO: this is not clean separation of concerns - it's a dirty dirty hack */
-  const struct sink *s = subnet_sink(&state.c, sub->sink);
+  const struct sink *s = subnet_sink(&state.c, sink);
   uint8_t num = 0;
 
   EACH_SINK_FRAGMENT(s,
     PRINTF("pubsub: hit value for %d with size %d\n", subid, frag->length);
-    if (subid != sub->subid) continue;
+    if (subid != sid) continue;
     if (frag->length == 0) continue;
     PRINTF("pubsub: extracted.\n");
     payloads[num] = payload;
@@ -185,7 +177,7 @@ static void on_onsent(struct subnet_conn *c, short sink, subid_t subid) {
   }
 }
 
-static enum existance sub_state(struct full_subscription *s) {
+static enum existance sub_state(struct esubscription *s) {
   if (s->revoked == 1) {
     /* invalid (never started) subscription */
     return UNKNOWN;
@@ -206,9 +198,7 @@ static enum existance sub_state(struct full_subscription *s) {
 }
 
 static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void *data) {
-  struct full_subscription *s = find_subscription(sink, subid);
-  s->subid = subid;
-  s->sink = sink;
+  struct esubscription *s = find_subscription(sink, subid);
   s->revoked = 0;
   memcpy(&s->in, data, sizeof(struct subscription));
 
@@ -222,7 +212,7 @@ static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void 
 }
 
 static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid) {
-  struct full_subscription *remove = find_subscription(sink, subid);
+  struct esubscription *remove = find_subscription(sink, subid);
   if (remove->revoked == 0) {
     if (sinks[sink].maxsub == subid) {
       /* This could be changed to find next highest, but... */
@@ -238,12 +228,12 @@ static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid) {
 }
 
 static enum existance on_exists(struct subnet_conn *c, short sink, subid_t subid) {
-  struct full_subscription *s = find_subscription(sink, subid);
+  struct esubscription *s = find_subscription(sink, subid);
   return sub_state(s);
 }
 
 static dlen_t on_inform(struct subnet_conn *c, short sink, subid_t subid, void *target, dlen_t space) {
-  struct full_subscription *s = find_subscription(sink, subid);
+  struct esubscription *s = find_subscription(sink, subid);
 
   if (space < sizeof(struct subscription)) {
     return 0;

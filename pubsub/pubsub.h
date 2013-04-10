@@ -47,11 +47,14 @@ struct subscription {
   struct aggregator aggregator;
   enum reading_type sensor;
 };
-struct full_subscription {
-  subid_t subid;
-  short sink;
+struct esubscription {
   clock_time_t revoked;
   struct subscription in;
+};
+struct wsubscription {
+  short sink;
+  subid_t subid;
+  struct esubscription *esub;
 };
 struct pubsub_state {
   struct subnet_conn c;
@@ -68,11 +71,11 @@ struct pubsub_callbacks {
   void (* on_onsent)(short sink, subid_t subid);
 
   /* Function to call when a new subscription was found */
-  void (* on_subscription)(struct full_subscription *s);
+  void (* on_subscription)(struct esubscription *s);
 
   /* Function to call when a subscription was removed. Note that after this
    * function returns, the object pointed to will be replaced */
-  void (* on_unsubscription)(struct full_subscription *s);
+  void (* on_unsubscription)(struct esubscription *s);
 };
 /*---------------------------------------------------------------------------*/
 /**
@@ -87,21 +90,22 @@ void pubsub_init(struct pubsub_callbacks *u);
  * \param subid The subscription's ID
  * \return The found subscription or NULL if the subscription is unknown
  */
-struct full_subscription * find_subscription(short sink, subid_t subid);
+struct esubscription * find_subscription(short sink, subid_t subid);
 
 /**
  * \brief Determine if the given subscription is active
  * \param s Subscription
  * \return True if subscription is KNOWN, false otherwise
  */
-bool is_active(struct full_subscription *s);
+bool is_active(struct esubscription *s);
 
 /**
  * \brief Make the given pointer point to the next subscription
- * \param prev Pointer to pointer to previous subscription (or NULL for first)
+ * \param prev Pointer to subscription to update. .sink should be set to -1
+ *             before calling this function
  * \return True if a next subscription was found, false otherwise
  */
-bool pubsub_next_subscription(struct full_subscription **prev);
+bool pubsub_next_subscription(struct wsubscription *rev);
 
 /**
  * \brief Add data for a subscription to the current publish
@@ -163,7 +167,8 @@ void pubsub_writein();
 
 /**
  * \brief Find all published values for the given subscription
- * \param sub The subscription to find values for
+ * \param sink The sink of the subscription to find values for
+ * \param subid The subscription to find values for
  * \param payloads Array into which to load pointers to values. Needs to be able
  *          to hold PUBSUB_MAX_SUBSCRIPTIONS values.
  * \return The number of values extracted
@@ -174,7 +179,7 @@ void pubsub_writein();
  * If you use this data to write data to the packetbuf, you might want to look
  * at wrapping it in pubsub_writeout() and pubsub_writein().
  */
-uint8_t extract_data(struct full_subscription *sub, void *payloads[]);
+uint8_t extract_data(short sink, subid_t subid, void *payloads[]);
 
 /**
  * \brief Find the highest known subscription id for the given sink
