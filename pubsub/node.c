@@ -13,21 +13,21 @@
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
 AUTOSTART_PROCESSES(&node_process);
-static double rand(double max) {
+static double r(double max) {
   return max * ((double)random_rand())/65535;
 }
 static humidity *get_humidity(struct location *l) {
   static humidity h;
   h.location.x = l->x;
   h.location.y = l->y;
-  h.value = rand(100);
+  h.value = r(100);
   return &h;
 }
 static pressure *get_pressure(struct location *l) {
   static pressure p;
   p.location.x = l->x;
   p.location.y = l->y;
-  p.value = rand(100);
+  p.value = r(100);
   return &p;
 }
 /*---------------------------------------------------------------------------*/

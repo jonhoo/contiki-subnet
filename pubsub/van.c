@@ -6,9 +6,10 @@
  */
 
 #include "contiki.h"
-#include "lib/pubsub/subscriber.h"
-#include "readings.h"
-#include <stdlib.h>
+#include "lib/subscriber.h"
+#include "callbacks.c"
+#include <stdio.h>
+#include <string.h>
 /*---------------------------------------------------------------------------*/
 #define MAX(a,b) (a>b?a:b)
 #define MAX_DISTANCE 20.0
@@ -16,68 +17,65 @@
 #define MIN_PRESSURE 0.7
 #define MAX_PRESSURE 0.9
 /*---------------------------------------------------------------------------*/
-static rimeaddr_t nodes[20];
-static int numnodes = 0;
-/**
- * \brief
- *          Handler for when a new sensor reading is available. Simply stores
- *          the node address if it is new to us.
- * \param r
- *          The new reading
- */
-static void on_reading(struct readings *r) {
-  int i = 0;
-  for (;i < MAX(numnodes, 20);i++) {
-    if (nodes[i] == r->node) {
-      return;
-    }
-  }
+static struct locdouble readings[5][2];
+static int numreadings = 0;
 
-  nodes[numnodes%20] = r->node;
-  numnodes++;
+static void on_reading(subid_t subid, void *data) {
+  memcpy(&readings[numreadings%5][subid], data, sizeof(struct locdouble));
+  numreadings++;
 }
 /*---------------------------------------------------------------------------*/
-PROCESS(sink_process, "Sink");
-AUTOSTART_PROCESSES(&sink_process);
+PROCESS(van_process, "Van");
+AUTOSTART_PROCESSES(&van_process);
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(sink_process, ev, data)
+PROCESS_THREAD(van_process, ev, data)
 {
   static struct etimer et;
-  static struct subscriber ss;
   static struct location myloc = { 20, 10 };
+  struct subscription s;
+  int i,j;
 
   PROCESS_BEGIN();
 
-  // Initialize subscriber
-  subscriber_start(&ss, &on_reading);
+  for (i = 0; i < 5; i++) {
+    for (j = 0; j < 5; j++) {
+      readings[i][j].value = -1;
+    }
+  }
 
-  // Static properties
-  subscriber_subscribe(&ss, READING_LOCATION, INT_MAX, sizeof(struct location));
-  subscriber_subscribe(&ss, READING_HUMIDITY,      10, sizeof(double));
-  subscriber_subscribe(&ss, READING_PRESSURE,      30, sizeof(double));
+  /* initialize subscriber */
+  subscriber_start(&on_reading);
 
-  // Filters
-  // Strict filter
-  subscriber_filter(&ss, READING_LOCATION, DISTANCE_LTE, &myloc, &MAX_DISTANCE);
-  // Must also satisfy one of these
-  subscriber_satisfy(&ss, READING_HUMIDITY, GTE, &MIN_HUMIDITY);
-  subscriber_satisfy(&ss, READING_PRESSURE, BETWEEN, &MIN_PRESSURE, &MAX_PRESSURE);
+  /* no special stuff here */
+  s.soft.filter = NO_SOFT_FILTER;
+  s.hard.filter = BE_CLOSE_TO;
+  s.hard.arg.loc = myloc;
+  s.aggregator.a = NO_AGGREGATION;
+
+  /* subscribe to humidity */
+  s.interval = 10;
+  s.sensor = READING_HUMIDITY;
+  subscriber_subscribe(&s);
+
+  /* subscribe to pressure */
+  s.interval = 20;
+  s.sensor = READING_PRESSURE;
+  subscriber_subscribe(&s);
 
   while(1) {
     etimer_set(&et, CLOCK_SECOND);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
     // Update display of nodes
-    for (int i = 0; i < MAX(numnodes, 20); i++) {
-      struct location *l = subscriber_data(&ss, nodes[i], READING_LOCATION);
-      double *humidity   = subscriber_data(&ss, nodes[i], READING_HUMIDITY);
-      double *pressure   = subscriber_data(&ss, nodes[i], READING_PRESSURE);
+    for (i = 0; i < 5; i++) {
+      humidity h = readings[i][0];
+      pressure p = readings[i][1];
 
-      if (humidity != NULL) {
-        printf("Node at <%03d, %03d> has humidity %.2f\n", l->x, l->y, *humidity);
+      if (h.value != -1) {
+        printf("Node at <%03d, %03d> has humidity %.2f\n", h.location.x, h.location.y, h.value);
       }
-      if (pressure != NULL) {
-        printf("Node at <%03d, %03d> has pressure %.2f\n", l->x, l->y, *pressure);
+      if (p.value != -1) {
+        printf("Node at <%03d, %03d> has pressure %.2f\n", p.location.x, p.location.y, p.value);
       }
     }
 

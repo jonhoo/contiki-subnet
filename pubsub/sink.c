@@ -7,16 +7,19 @@
 
 #include "contiki.h"
 #include "lib/subscriber.h"
+#include "pubsub-config.h"
 #include "callbacks.c"
-#include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 #define MAX(a,b) (a>b?a:b)
 /*---------------------------------------------------------------------------*/
 static struct locdouble readings[5][2];
+static int numreadings = 0;
 
-static void on_reading(int sink, subid_t subid, void *data) {
-  memcpy(&readings[sink][subid], data, sizeof(struct locdouble));
+static void on_reading(subid_t subid, void *data) {
+  memcpy(&readings[numreadings%5][subid], data, sizeof(struct locdouble));
+  numreadings++;
 }
 /*---------------------------------------------------------------------------*/
 PROCESS(sink_process, "Sink");
@@ -38,6 +41,11 @@ PROCESS_THREAD(sink_process, ev, data)
 
   /* initialize subscriber */
   subscriber_start(&on_reading);
+
+  /* no special stuff here */
+  s.soft.filter = NO_SOFT_FILTER;
+  s.hard.filter = NO_HARD_FILTER;
+  s.aggregator.a = NO_AGGREGATION;
 
   /* subscribe to humidity */
   s.interval = 20;

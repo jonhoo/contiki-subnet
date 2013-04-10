@@ -1,3 +1,5 @@
+#ifndef __PUBSUB_CONF_H__
+#define __PUBSUB_CONF_H__
 /*---------------------------------------------------------------------------*/
 /* sensor structs */
 struct location {
@@ -27,11 +29,12 @@ union soft_arg {
 };
 
 enum hard_filter {
-  NO_HARD_FILTER
+  NO_HARD_FILTER,
+  BE_CLOSE_TO
 };
 
 union hard_arg {
-  double reading;
+  struct location loc;
 };
 
 enum aggregator_t {
@@ -42,3 +45,4 @@ union aggregator_arg {
   double distance;
 };
 /*---------------------------------------------------------------------------*/
+#endif /* __PUBSUB_CONF_H__ */
