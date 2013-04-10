@@ -8,7 +8,7 @@
  * \author Jon Gjengset <jon@tsp.io>
  */
 
-#include "lib/pubsub/common.h"
+#include "lib/pubsub.h"
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 /* private functions */

@@ -12,7 +12,7 @@
 
 #ifndef __PUBSUB_SUB_H__
 #define __PUBSUB_SUB_H__
-#include "lib/pubsub/common.h"
+#include "lib/pubsub.h"
 
 #ifdef PUBSUB_CONF_RESEND_INTERVAL
 #define PUBSUB_RESEND_INTERVAL PUBSUB_CONF_RESEND_INTERVAL

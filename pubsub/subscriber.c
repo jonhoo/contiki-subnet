@@ -7,7 +7,7 @@
  * \file   Subscriber node implementation
  * \author Jon Gjengset <jon@tsp.io>
  */
-#include "lib/pubsub/subscriber.h"
+#include "lib/subscriber.h"
 
 /*---------------------------------------------------------------------------*/
 /* private functions */

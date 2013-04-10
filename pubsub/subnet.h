@@ -20,6 +20,7 @@
 
 #include "net/rime/adisclose.h"
 #include "net/rime/rimeaddr.h"
+#include <stddef.h>
 #include <stdbool.h>
 
 #ifdef SUBNET_CONF_MAX_SINKS

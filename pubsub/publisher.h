@@ -12,7 +12,7 @@
 
 #ifndef __PUBSUB_PUB_H__
 #define __PUBSUB_PUB_H__
-#include "lib/pubsub/common.h"
+#include "lib/pubsub.h"
 
 #ifdef PUBSUB_CONF_MAX_SENSORS
 #define PUBSUB_MAX_SENSORS PUBSUB_CONF_MAX_SENSORS

@@ -7,7 +7,7 @@
  * \file   Publisher node implementation
  * \author Jon Gjengset <jon@tsp.io>
  */
-#include "lib/pubsub/publisher.h"
+#include "lib/publisher.h"
 #include "sys/ctimer.h"
 
 /*---------------------------------------------------------------------------*/
