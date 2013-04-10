@@ -8,6 +8,7 @@
  * \author Jon Gjengset <jon@tsp.io>
  */
 #include "lib/subscriber.h"
+#include "sys/ctimer.h"
 
 /*---------------------------------------------------------------------------*/
 /* private functions */

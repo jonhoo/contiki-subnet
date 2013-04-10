@@ -37,15 +37,15 @@
 #define DISCLOSE_ATTRIBUTES   { PACKETBUF_ADDR_RECEIVER, PACKETBUF_ADDRSIZE }, \
                         BROADCAST_ATTRIBUTES
 
-struct disclose_callbacks {
-  void (* recv)(struct disclose_conn *c, const rimeaddr_t *from);
-  void (* hear)(struct disclose_conn *c, const rimeaddr_t *from);
-  void (* sent)(struct disclose_conn *ptr, int status, int num_tx);
-};
-
 struct disclose_conn {
   struct broadcast_conn c;
   const struct disclose_callbacks *u;
+};
+
+struct disclose_callbacks {
+  void (* recv)(struct disclose_conn *c, const rimeaddr_t *from);
+  void (* hear)(struct disclose_conn *c, const rimeaddr_t *from);
+  void (* sent)(struct disclose_conn *c, int status);
 };
 
 void disclose_open(struct disclose_conn *c, uint16_t channel,
