@@ -83,6 +83,7 @@ void subscriber_close() {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_resubscribe(void *subidp) {
+  /* TODO: subscribe to unsubscriptions too */
   subid_t subid = *((subid_t *)subidp);
   PRINTF("subscriber: resubscribing to %d\n", subid);
   pubsub_resubscribe(subid);
