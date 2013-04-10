@@ -17,7 +17,7 @@
 #ifdef PUBSUB_CONF_RESEND_INTERVAL
 #define PUBSUB_RESEND_INTERVAL PUBSUB_CONF_RESEND_INTERVAL
 #else
-#define PUBSUB_RESEND_INTERVAL 20*CLOCK_SECOND
+#define PUBSUB_RESEND_INTERVAL 60*CLOCK_SECOND
 #endif
 /*---------------------------------------------------------------------------*/
 /**

@@ -88,7 +88,7 @@ static void on_resubscribe(void *subidp) {
   PRINTF("subscriber: resubscribing to %d\n", subid);
   pubsub_resubscribe(subid);
   ctimer_restart(&resubscribe[subid]);
-  PRINTF("subscriber: timer reset\n");
+  PRINTF("subscriber: timer restarted\n");
 }
 static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("subscriber: got data for %d:%d\n", sink, subid);
