@@ -49,7 +49,7 @@ static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void clean_buffers(struct subnet_conn *c, struct sink *s);
-static void *inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *prev);
+static bool inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *buf);
 static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops);
 
 static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from);
@@ -111,8 +111,8 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
     s = &c->sinks[sinkid];
   }
 
-  void *n = inject_packetbuf(subid, bytes, &s->fragments, &s->buflen, payload, s->buf+s->buflen);
-  if (n == NULL) {
+  bool n = inject_packetbuf(subid, bytes, &s->fragments, &s->buflen, payload, s->buf+s->buflen);
+  if (!n) {
     PRINTF("subnet: packet is full\n");
     return false;
   }
@@ -806,8 +806,8 @@ static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops
   packetbuf_set_attr(PACKETBUF_ATTR_HOPS, hops);
 }
 
-static void * inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *prev) {
-  struct fragment *f = prev;
+static bool inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *buf) {
+  struct fragment *f = buf;
   dlen_t sz = sizeof(struct fragment) + bytes;
   dlen_t blen;
   short frags;
@@ -821,7 +821,7 @@ static void * inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dl
   }
 
   if (blen > PACKETBUF_SIZE) {
-    return NULL;
+    return false;
   }
 
   if (fragments == NULL) {
@@ -854,9 +854,7 @@ static void * inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dl
   }
 
   PRINTF("subnet: write successful, total now %d in %d fragments\n", blen, frags);
-
-  SKIPBYTES(f, struct fragment *, sz);
-  return f;
+  return true;
 }
 /*---------------------------------------------------------------------------*/
 /** @} */
