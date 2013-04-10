@@ -11,3 +11,7 @@ Makefile.target
 doc/html
 patches-*
 tools/tunslip6
+tools/cooja/apps
+build/
+dist/
+tools/coffee-manager/coffee.jar
