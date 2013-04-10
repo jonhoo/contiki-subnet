@@ -127,6 +127,7 @@ static void on_subscription(struct full_subscription *s) {
   if (s->in.interval < c.etimer.timer.interval) {
     PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c.etimer.timer.interval);
     ctimer_set(&c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
+    on_collect_timer_expired(&s->in.sensor);
   }
 }
 static void on_unsubscription(struct full_subscription *old) {
