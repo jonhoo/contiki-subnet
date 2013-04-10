@@ -443,35 +443,8 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   struct neighbor *oldest;
   struct sink_neighbor *replace;
   short cost = packetbuf_attr(PACKETBUF_ATTR_HOPS);
-  int replacei;
+  int replacei = 0;
 
-  /* find neighbor pointer */
-  oldest = n;
-  for (i = 0; i < c->numneighbors; i++) {
-    if (rimeaddr_cmp(&c->neighbors[i].addr, from)) {
-      n = &c->neighbors[i];
-    }
-
-    if (oldest == NULL || c->neighbors[i].last_active < oldest->last_active) {
-      oldest = &c->neighbors[i];
-    }
-  }
-
-  /* create neighbor if not found */
-  if (n == NULL) {
-    if (c->numneighbors >= SUBNET_MAX_NEIGHBORS) {
-      PRINTF("%d.%d: subnet: max neighbours limit hit\n",
-          rimeaddr_node_addr.u8[0],rimeaddr_node_addr.u8[1]);
-      n = oldest;
-    } else {
-      n = &c->neighbors[c->numneighbors];
-      c->numneighbors++;
-    }
-
-    rimeaddr_copy(&n->addr, from);
-  }
-
-  n->last_active = clock_seconds();
   PRINTF("subnet: updating routing table\n");
 
   /* find route to sink */
@@ -509,12 +482,44 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
       route->buflen = 0;
       route->fragments = 0;
       route->revoked = 0;
-
-      if (replacesinkid == -1) {
-        c->numsinks++;
-      }
     }
   }
+
+  /* if we didn't hear this subscription from someone else, we're done */
+  if (rimeaddr_cmp(from, &rimeaddr_null)) {
+    PRINTF("subnet: we sent the packet, so no need to update neighbors\n");
+    return;
+  }
+
+  PRINTF("subnet: update neighbor %d.%d\n", from->u8[0], from->u8[1]);
+
+  /* find neighbor pointer */
+  oldest = n;
+  for (i = 0; i < c->numneighbors; i++) {
+    if (rimeaddr_cmp(&c->neighbors[i].addr, from)) {
+      n = &c->neighbors[i];
+    }
+
+    if (oldest == NULL || c->neighbors[i].last_active < oldest->last_active) {
+      oldest = &c->neighbors[i];
+    }
+  }
+
+  /* create neighbor if not found */
+  if (n == NULL) {
+    if (c->numneighbors >= SUBNET_MAX_NEIGHBORS) {
+      PRINTF("subnet: max neighbours limit hit\n");
+      n = oldest;
+    } else {
+      PRINTF("subnet: new neighbour node created for %d.%d\n", from->u8[0], from->u8[1]);
+      n = &c->neighbors[c->numneighbors];
+      c->numneighbors++;
+    }
+
+    rimeaddr_copy(&n->addr, from);
+  }
+
+  n->last_active = clock_seconds();
 
   /* find cheapest and oldest next hop towards sink */
   for (i = 0; i < route->numhops; i++) {
