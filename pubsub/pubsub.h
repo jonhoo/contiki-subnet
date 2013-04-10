@@ -49,7 +49,7 @@ struct subscription {
 };
 struct full_subscription {
   subid_t subid;
-  int sink;
+  short sink;
   clock_time_t revoked;
   struct subscription in;
 };
@@ -62,10 +62,10 @@ struct pubsub_callbacks {
   void (* on_errpub)();
 
   /* Function to call when a publish is received */
-  void (* on_ondata)(int sink, subid_t subid, void *data);
+  void (* on_ondata)(short sink, subid_t subid, void *data);
 
   /* Function to call when a publish was sent successfully */
-  void (* on_onsent)(int sink, subid_t subid);
+  void (* on_onsent)(short sink, subid_t subid);
 
   /* Function to call when a new subscription was found */
   void (* on_subscription)(struct full_subscription *s);
@@ -87,7 +87,7 @@ void pubsub_init(struct pubsub_callbacks *u);
  * \param subid The subscription's ID
  * \return The found subscription or NULL if the subscription is unknown
  */
-struct full_subscription * find_subscription(int sink, subid_t subid);
+struct full_subscription * find_subscription(short sink, subid_t subid);
 
 /**
  * \brief Determine if the given subscription is active
@@ -111,13 +111,13 @@ bool pubsub_next_subscription(struct full_subscription **prev);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool pubsub_add_data(int sinkid, subid_t subid, void *payload, dlen_t bytes);
+bool pubsub_add_data(short sinkid, subid_t subid, void *payload, dlen_t bytes);
 
 /**
  * \brief Send publishe data packet
  * \param sink Sink to send data to
  */
-void pubsub_publish(int sinkid);
+void pubsub_publish(short sinkid);
 
 /**
  * \brief Send out a new subscription
@@ -145,7 +145,7 @@ void pubsub_unsubscribe(subid_t subid);
  * Note that this function will only return something sensible after the first
  * subscription has been sent out!
  */
-int pubsub_myid();
+short pubsub_myid();
 
 /**
  * \brief Redirect all writes to the given sink to a spare buffer
@@ -154,7 +154,7 @@ int pubsub_myid();
  * Note that only a single buffer is available per buffer, so this function can
  * only be active for one sink at the time.
  */
-void pubsub_writeout(int sinkid);
+void pubsub_writeout(short sinkid);
 
 /**
  * \brief Write all data from the spare buffer into the sink's data
@@ -174,14 +174,14 @@ void pubsub_writein();
  * If you use this data to write data to the packetbuf, you might want to look
  * at wrapping it in pubsub_writeout() and pubsub_writein().
  */
-int extract_data(struct full_subscription *sub, void *payloads[]);
+uint8_t extract_data(struct full_subscription *sub, void *payloads[]);
 
 /**
  * \brief Find the highest known subscription id for the given sink
  * \param sink The sink id
  * \return the highest known subscription id for the given sink
  */
-int last_subscription(int sink);
+subid_t last_subscription(short sink);
 
 /**
  * \brief End all subscriptions and close subnet connection

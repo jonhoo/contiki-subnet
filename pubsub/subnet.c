@@ -40,16 +40,16 @@ static const struct packetbuf_attrlist attributes[] = {
   VAR = (TYPE)(((char*) VAR)+BYTES);
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink);
+static short find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink);
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto);
 static void broadcast(struct disclose_conn *c);
-static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid);
+static bool is_known(struct subnet_conn *c, short sinkid, subid_t subid);
 static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink);
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void clean_buffers(struct subnet_conn *c, struct sink *s);
-static bool inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *buf);
+static bool inject_packetbuf(subid_t subid, dlen_t bytes, uint8_t *fragments, dlen_t *buflen, void *payload, void *buf);
 static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops);
 
 static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from);
@@ -95,7 +95,7 @@ void subnet_close(struct subnet_conn *c) {
   disclose_close(&c->peer);
 }
 
-bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, dlen_t bytes) {
+bool subnet_add_data(struct subnet_conn *c, short sinkid, subid_t subid, void *payload, dlen_t bytes) {
   struct sink *s;
   PRINTF("subnet: adding data for %d:%d\n", sinkid, subid);
 
@@ -120,7 +120,7 @@ bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *pay
   return true;
 }
 
-void subnet_writeout(struct subnet_conn *c, int sinkid) {
+void subnet_writeout(struct subnet_conn *c, short sinkid) {
   PRINTF("subnet: enabling writeout buffer\n");
   c->writeout = sinkid;
   c->writesink.fragments = 0;
@@ -139,7 +139,7 @@ void subnet_writein(struct subnet_conn *c) {
   c->writeout = -1;
 }
 
-void subnet_publish(struct subnet_conn *c, int sinkid) {
+void subnet_publish(struct subnet_conn *c, short sinkid) {
   PRINTF("subnet: publish data\n");
 
   if (sinkid >= c->numsinks) {
@@ -207,8 +207,8 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
   broadcast(&c->pubsub);
 }
 
-int subnet_myid(struct subnet_conn *c) {
-  static int myid = -1;
+short subnet_myid(struct subnet_conn *c) {
+  static short myid = -1;
   if (myid == -1) {
     myid = find_sinkid(c, &rimeaddr_node_addr);
   }
@@ -227,13 +227,13 @@ subid_t next_fragment(struct fragment **raw, void **payload) {
   return subid;
 }
 
-const struct sink *subnet_sink(struct subnet_conn *c, int sinkid) {
+const struct sink *subnet_sink(struct subnet_conn *c, short sinkid) {
   return &c->sinks[sinkid];
 }
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
-static int find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
-  int i;
+static short find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink) {
+  short i;
   for (i = 0; i < c->numsinks; i++) {
     if (rimeaddr_cmp(&c->sinks[i].sink, sink)) {
       return i;
@@ -342,7 +342,7 @@ static void broadcast(struct disclose_conn *c) {
 }
 
 /* because REVOKED subscriptions are still known */
-static bool is_known(struct subnet_conn *c, int sinkid, subid_t subid) {
+static bool is_known(struct subnet_conn *c, short sinkid, subid_t subid) {
   enum existance e = c->u->exists(c, sinkid, subid);
   return e == UNKNOWN ? false : true;
 }
@@ -354,7 +354,7 @@ static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink) {
 }
 
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink) {
-  int sinkid = find_sinkid(c, sink);
+  short sinkid = find_sinkid(c, sink);
   struct sink *s;
 
   if (sinkid == -1) return;
@@ -371,7 +371,7 @@ static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink) {
 
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   int i;
-  int replacesinkid = -1;
+  short replacesinkid = -1;
   struct neighbor *n = NULL;
   struct sink *route = NULL;
   struct neighbor *oldest;
@@ -489,7 +489,7 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
   }
 
   update_routes(c, sink, from);
-  int sinkid = find_sinkid(c, sink);
+  short sinkid = find_sinkid(c, sink);
 
   EACH_PACKET_FRAGMENT(
     if (!is_known(c, sinkid, subid) == subscribe) {
@@ -544,7 +544,7 @@ static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
     }
 
     {
-      int sinkid = find_sinkid(c, sink);
+      short sinkid = find_sinkid(c, sink);
       struct sink *s;
       struct peer_packet *p = packetbuf_dataptr();
       subid_t *revoked = (subid_t *)(p+1);
@@ -629,7 +629,7 @@ static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
 static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
   struct subnet_conn *c = (struct subnet_conn *)disclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  int sinkid;
+  short sinkid;
   struct sink *s;
 
   PRINTF("subnet: got publish packet from downstream node %d.%d\n", from->u8[0], from->u8[1]);
@@ -690,7 +690,7 @@ static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
       subid_t revoked[fragments];
       subid_t unknown[fragments];
 
-      int sinkid = find_sinkid(c, sink);
+      short sinkid = find_sinkid(c, sink);
       if (sinkid != -1) {
         if (c->sinks[sinkid].revoked != 0) {
           PRINTF("subnet: sink in publish packet has left, notifying...\n");
@@ -753,7 +753,7 @@ static void on_sent(struct disclose_conn *disclose, int status) {
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
   const rimeaddr_t *prevto = packetbuf_addr(PACKETBUF_ADDR_RECEIVER);
   const rimeaddr_t *nexthop;
-  int sinkid = find_sinkid(c, sink);
+  short sinkid = find_sinkid(c, sink);
   struct sink *s = &c->sinks[sinkid];
 
   if (!rimeaddr_cmp(prevto, &rimeaddr_null) && status != MAC_TX_OK) {
@@ -806,11 +806,11 @@ static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops
   packetbuf_set_attr(PACKETBUF_ATTR_HOPS, hops);
 }
 
-static bool inject_packetbuf(subid_t subid, dlen_t bytes, short *fragments, dlen_t *buflen, void *payload, void *buf) {
+static bool inject_packetbuf(subid_t subid, dlen_t bytes, uint8_t *fragments, dlen_t *buflen, void *payload, void *buf) {
   struct fragment *f = buf;
   dlen_t sz = sizeof(struct fragment) + bytes;
   dlen_t blen;
-  short frags;
+  uint8_t frags;
 
   PRINTF("subnet: writing %d bytes (%d data) for subid %d\n", sz, bytes, s->buflen, subid);
 

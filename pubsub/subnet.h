@@ -86,14 +86,14 @@ struct fragment {
  */
 struct neighbor {
   rimeaddr_t addr;
-  unsigned long last_active; /* last time this next hop was heard from */
+  clock_time_t last_active; /* last time this next hop was heard from */
 };
 
 /**
  * \brief Information about a single next hop
  */
 struct sink_neighbor {
-  short cost; /* advertised cost for this hop by next hop */
+  uint8_t cost; /* advertised cost for this hop by next hop */
   struct neighbor *node;
 };
 
@@ -102,11 +102,11 @@ struct sink_neighbor {
  */
 struct sink {
   rimeaddr_t sink;
-  short advertised_cost; /* what cost we've advertised this route as */
-  short numhops;
+  uint8_t advertised_cost; /* what cost we've advertised this route as */
+  uint8_t numhops;
   struct sink_neighbor nexthops[SUBNET_MAX_ALTERNATE_ROUTES];
 
-  short fragments;
+  uint8_t fragments;
   dlen_t buflen;
   char buf[PACKETBUF_SIZE];
 
@@ -123,16 +123,16 @@ struct subnet_conn {
   const struct subnet_callbacks *u; /* callbacks */
   subid_t subid;                        /* last sent subscription id */
 
-  short numsinks;                   /* number of routes (i.e. sinks) known */
+  uint8_t numsinks;                   /* number of routes (i.e. sinks) known */
   struct sink sinks[SUBNET_MAX_SINKS];
 
-  short numneighbors;               /* number of neighbors known */
+  uint8_t numneighbors;               /* number of neighbors known */
   struct neighbor neighbors[SUBNET_MAX_NEIGHBORS];
 
   struct queuebuf *sentpacket;      /* store a publish message until it has been
                                        sent to the next hop */
 
-  int writeout;
+  short writeout;
   struct sink writesink;
 };
 
@@ -150,33 +150,33 @@ struct subnet_callbacks {
 
   /* called when a publish is received. Note that data MUST be copied if it is
    * to be reused later as the memory WILL be reclaimed. */
-  void (* ondata)(struct subnet_conn *c, int sinkid, subid_t subid, void *data);
+  void (* ondata)(struct subnet_conn *c, short sinkid, subid_t subid, void *data);
 
   /* called when a publish was sent successfully */
-  void (* onsent)(struct subnet_conn *c, int sinkid, subid_t subid);
+  void (* onsent)(struct subnet_conn *c, short sinkid, subid_t subid);
 
   /* called when a new subscription is in packetbuf. Note that data MUST be
    * copied if it is to be reused later as the memory WILL be reclaimed */
-  void (* subscribe)(struct subnet_conn *c, int sinkid, subid_t subid, void *data);
+  void (* subscribe)(struct subnet_conn *c, short sinkid, subid_t subid, void *data);
 
   /* called when a subscription is cancelled */
-  void (* unsubscribe)(struct subnet_conn *c, int sinkid, subid_t subid);
+  void (* unsubscribe)(struct subnet_conn *c, short sinkid, subid_t subid);
 
   /* should return true if the given subscription is known. Note that this
    * function may be called quite frequently, so it may be well worth to
    * optimize */
-  enum existance (* exists)(struct subnet_conn *c, int sinkid, subid_t subid);
+  enum existance (* exists)(struct subnet_conn *c, short sinkid, subid_t subid);
 
   /* should fill target with information about the given subscription and return
    * the number of bytes written. It is up to this function to make sure it
    * does not write more than the given amount of bytes. If the function
    * determines it cannot do with so few bytes, it should return 0 */
-  dlen_t (* inform)(struct subnet_conn *c, int sinkid, subid_t subid, void *target, dlen_t space);
+  dlen_t (* inform)(struct subnet_conn *c, short sinkid, subid_t subid, void *target, dlen_t space);
 
   /* called when a sink has indicated that it is leaving for good. Should revoke
    * all subscriptions to this sink. Note that this sinkid may be reused in the
    * future! */
-  void (* sink_left)(struct subnet_conn *c, int sinkid);
+  void (* sink_left)(struct subnet_conn *c, short sinkid);
 };
 /*---------------------------------------------------------------------------*/
 /* public functions */
@@ -211,14 +211,14 @@ void subnet_close(struct subnet_conn *c);
  * \param bytes Number of bytes of data being added
  * \return True if data was added, false if no more data can be added
  */
-bool subnet_add_data(struct subnet_conn *c, int sinkid, subid_t subid, void *payload, dlen_t bytes);
+bool subnet_add_data(struct subnet_conn *c, short sinkid, subid_t subid, void *payload, dlen_t bytes);
 
 /**
  * \brief Send publishe data packet
  * \param c Connection state
  * \param sink Sink to send data to
  */
-void subnet_publish(struct subnet_conn *c, int sinkid);
+void subnet_publish(struct subnet_conn *c, short sinkid);
 
 /**
  * \brief Send out a new subscription
@@ -253,7 +253,7 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid);
  * Note that this function will only return something sensible after the first
  * subscription has been sent out!
  */
-int subnet_myid(struct subnet_conn *c);
+short subnet_myid(struct subnet_conn *c);
 
 /**
  * \brief Redirect all writes to the given sink to a spare buffer
@@ -263,7 +263,7 @@ int subnet_myid(struct subnet_conn *c);
  * Note that only a single buffer is available per buffer, so this function can
  * only be active for one sink at the time.
  */
-void subnet_writeout(struct subnet_conn *c, int sinkid);
+void subnet_writeout(struct subnet_conn *c, short sinkid);
 
 /**
  * \brief Write all data from the spare buffer into the sink's data
@@ -294,11 +294,11 @@ subid_t next_fragment(struct fragment **raw, void **payload);
  * \param sinkid Sink to get data for
  * \return The real sink struct for the given sink. Be careful!
  */
-const struct sink *subnet_sink(struct subnet_conn *c, int sinkid);
+const struct sink *subnet_sink(struct subnet_conn *c, short sinkid);
 
 #define EACH_FRAGMENT(FRAGMENTS, BUF, BLOCK) \
   { \
-    int fragi;                                                   \
+    short fragi;                                                 \
     subid_t subid;                                               \
     short fragments = FRAGMENTS;                                 \
     struct fragment *frag = (struct fragment *) BUF;             \

@@ -25,13 +25,13 @@
 static enum existance sub_state(struct full_subscription *s);
 
 static void on_errpub(struct subnet_conn *c);
-static void on_ondata(struct subnet_conn *c, int sink, subid_t subid, void *data);
-static void on_onsent(struct subnet_conn *c, int sink, subid_t subid);
-static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data);
-static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid);
-static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid);
-static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target, dlen_t space);
-static void on_sink_left(struct subnet_conn *c, int sink);
+static void on_ondata(struct subnet_conn *c, short sink, subid_t subid, void *data);
+static void on_onsent(struct subnet_conn *c, short sink, subid_t subid);
+static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void *data);
+static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid);
+static enum existance on_exists(struct subnet_conn *c, short sink, subid_t subid);
+static dlen_t on_inform(struct subnet_conn *c, short sink, subid_t subid, void *target, dlen_t space);
+static void on_sink_left(struct subnet_conn *c, short sink);
 /*---------------------------------------------------------------------------*/
 /* private members */
 struct sink_subscriptions {
@@ -52,11 +52,11 @@ static struct subnet_callbacks su = {
 };
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
-struct full_subscription * find_subscription(int sink, subid_t subid) {
+struct full_subscription * find_subscription(short sink, subid_t subid) {
   return &sinks[sink].subs[subid];
 }
 
-int last_subscription(int sink) {
+subid_t last_subscription(short sink) {
   return sinks[sink].maxsub;
 }
 
@@ -68,7 +68,7 @@ bool is_active(struct full_subscription *s) {
 }
 
 void pubsub_init(struct pubsub_callbacks *u) {
-  int i, j;
+  uint8_t i, j;
   /* all subscriptions are unknown/invalid initially */
   for (i = 0; i < SUBNET_MAX_SINKS; i++) {
     sinks[i].maxsub = 0;
@@ -87,7 +87,7 @@ void pubsub_init(struct pubsub_callbacks *u) {
 }
 
 bool pubsub_next_subscription(struct full_subscription **sub) {
-  int sink;
+  short sink;
   subid_t subid;
 
   if (*sub == NULL) {
@@ -121,10 +121,10 @@ bool pubsub_next_subscription(struct full_subscription **sub) {
   return true;
 }
 
-bool pubsub_add_data(int sinkid, subid_t subid, void *payload, dlen_t bytes) {
+bool pubsub_add_data(short sinkid, subid_t subid, void *payload, dlen_t bytes) {
   return subnet_add_data(&state.c, sinkid, subid, payload, bytes);
 }
-void pubsub_publish(int sinkid) {
+void pubsub_publish(short sinkid) {
   subnet_publish(&state.c, sinkid);
 }
 subid_t pubsub_subscribe(struct subscription *s) {
@@ -137,16 +137,16 @@ void pubsub_resubscribe(subid_t subid) {
 void pubsub_unsubscribe(subid_t subid) {
   subnet_unsubscribe(&state.c, subid);
 }
-int pubsub_myid() {
+short pubsub_myid() {
   return subnet_myid(&state.c);
 }
 void pubsub_close() {
   subnet_close(&state.c);
 }
-int extract_data(struct full_subscription *sub, void *payloads[]) {
+uint8_t extract_data(struct full_subscription *sub, void *payloads[]) {
   /* TODO: this is not clean separation of concerns - it's a dirty dirty hack */
   const struct sink *s = subnet_sink(&state.c, sub->sink);
-  int num = 0;
+  uint8_t num = 0;
 
   EACH_SINK_FRAGMENT(s,
     PRINTF("pubsub: hit value for %d with size %d\n", subid, frag->length);
@@ -159,7 +159,7 @@ int extract_data(struct full_subscription *sub, void *payloads[]) {
 
   return num;
 }
-void pubsub_writeout(int sinkid) {
+void pubsub_writeout(short sinkid) {
   subnet_writeout(&state.c, sinkid);
 }
 void pubsub_writein() {
@@ -173,13 +173,13 @@ static void on_errpub(struct subnet_conn *c) {
   }
 }
 
-static void on_ondata(struct subnet_conn *c, int sink, subid_t subid, void *data) {
+static void on_ondata(struct subnet_conn *c, short sink, subid_t subid, void *data) {
   if (state.u->on_ondata != NULL) {
     state.u->on_ondata(sink, subid, data);
   }
 }
 
-static void on_onsent(struct subnet_conn *c, int sink, subid_t subid) {
+static void on_onsent(struct subnet_conn *c, short sink, subid_t subid) {
   if (state.u->on_onsent != NULL) {
     state.u->on_onsent(sink, subid);
   }
@@ -205,7 +205,7 @@ static enum existance sub_state(struct full_subscription *s) {
   return UNKNOWN;
 }
 
-static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *data) {
+static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void *data) {
   struct full_subscription *s = find_subscription(sink, subid);
   s->subid = subid;
   s->sink = sink;
@@ -221,7 +221,7 @@ static void on_subscribe(struct subnet_conn *c, int sink, subid_t subid, void *d
   }
 }
 
-static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid) {
+static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid) {
   struct full_subscription *remove = find_subscription(sink, subid);
   if (remove->revoked == 0) {
     if (sinks[sink].maxsub == subid) {
@@ -237,12 +237,12 @@ static void on_unsubscribe(struct subnet_conn *c, int sink, subid_t subid) {
   }
 }
 
-static enum existance on_exists(struct subnet_conn *c, int sink, subid_t subid) {
+static enum existance on_exists(struct subnet_conn *c, short sink, subid_t subid) {
   struct full_subscription *s = find_subscription(sink, subid);
   return sub_state(s);
 }
 
-static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *target, dlen_t space) {
+static dlen_t on_inform(struct subnet_conn *c, short sink, subid_t subid, void *target, dlen_t space) {
   struct full_subscription *s = find_subscription(sink, subid);
 
   if (space < sizeof(struct subscription)) {
@@ -253,7 +253,7 @@ static dlen_t on_inform(struct subnet_conn *c, int sink, subid_t subid, void *ta
   return sizeof(struct subscription);
 }
 
-static void on_sink_left(struct subnet_conn *c, int sink) {
+static void on_sink_left(struct subnet_conn *c, short sink) {
   struct sink_subscriptions s = sinks[sink];
   subid_t i;
 

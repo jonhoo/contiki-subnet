@@ -26,7 +26,7 @@ bool hard_filter_proxy(struct hfilter *f) {
   }
 }
 
-void aggregator_proxy(struct aggregator *a, struct full_subscription *s, int items, void *datas[]) {
+void aggregator_proxy(struct aggregator *a, struct full_subscription *s, uint8_t items, void *datas[]) {
   return;
 }
 /*---------------------------------------------------------------------------*/

@@ -21,14 +21,14 @@
 /*---------------------------------------------------------------------------*/
 /* private functions */
 static void on_errpub();
-static void on_ondata(int sink, subid_t subid, void *data);
-static void on_onsent(int sink, subid_t subid);
+static void on_ondata(short sink, subid_t subid, void *data);
+static void on_onsent(short sink, subid_t subid);
 static void on_subscription(struct full_subscription *s);
 static void on_unsubscription(struct full_subscription *old);
 static void on_collect_timer_expired(void *tp);
 static void on_aggregate_timer_expired(void *sinkp);
 static void set_needs(enum reading_type t, bool need);
-static void aggregate_trigger(int sink, bool added_data);
+static void aggregate_trigger(short sink, bool added_data);
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct process *etarget;
@@ -42,27 +42,27 @@ static struct pubsub_callbacks callbacks = {
 };
 
 static struct ctimer aggregate[SUBNET_MAX_SINKS];
-static int is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
+static subid_t is[SUBNET_MAX_SINKS]; /* sometimes, I dislike C */
 
 static struct ctimer collect[PUBSUB_MAX_SENSORS];
 static dlen_t rsize[PUBSUB_MAX_SENSORS];
 
 static bool needs[PUBSUB_MAX_SENSORS];
-static int numneeds;
+static uint8_t numneeds;
 
 static bool (* soft_filter)(struct sfilter *f, enum reading_type t, void *data);
 static bool (* hard_filter)(struct hfilter *f);
-static void (* aggregator)(struct aggregator *a, struct full_subscription *s, int items, void *datas[]);
+static void (* aggregator)(struct aggregator *a, struct full_subscription *s, uint8_t items, void *datas[]);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
   bool (* hard_filter_proxy)(struct hfilter *f),
-  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, int items, void *datas[]),
+  void (* aggregator_proxy)(struct aggregator *a, struct full_subscription *s, uint8_t items, void *datas[]),
   clock_time_t agg_interval
 ) {
   clock_time_t max = (~((clock_time_t)0) / 2);
-  int i;
+  uint8_t i;
 
   soft_filter = soft_filter_proxy;
   hard_filter = hard_filter_proxy;
@@ -164,7 +164,7 @@ static void on_unsubscription(struct full_subscription *old) {
   PRINTF("publisher: new sample interval is %lu\n", min);
   ctimer_set(&c, min, &on_collect_timer_expired, &s->in.sensor);
 }
-static void aggregate_trigger(int sink, bool added_data) {
+static void aggregate_trigger(short sink, bool added_data) {
   /* if last add failed, we should send the packet straightaway */
   /* TODO: send before full? */
   PRINTF("publisher: new data for aggregation\n");
@@ -178,7 +178,7 @@ static void aggregate_trigger(int sink, bool added_data) {
     ctimer_restart(&aggregate[sink]);
   }
 }
-static void on_ondata(int sink, subid_t subid, void *data) {
+static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("publisher: heard data from upstream - adding\n");
 
   struct full_subscription *s = find_subscription(sink, subid);
@@ -188,7 +188,7 @@ static void on_ondata(int sink, subid_t subid, void *data) {
 static void on_errpub() {
   /* TODO */
 }
-static void on_onsent(int sink, subid_t subid) {
+static void on_onsent(short sink, subid_t subid) {
   /* TODO */
 }
 static void set_needs(enum reading_type t, bool need) {
@@ -216,9 +216,9 @@ static void on_collect_timer_expired(void *tp) {
 static void on_aggregate_timer_expired(void *sinkp) {
   static void *payloads[PUBSUB_MAX_SUBSCRIPTIONS];
   struct full_subscription *sub = NULL;
-  int sink = *((int *)sinkp);
-  int maxsub = last_subscription(sink);
-  int num, i, subid;
+  short sink = *((short *)sinkp);
+  subid_t maxsub = last_subscription(sink);
+  short num, i, subid;
 
   PRINTF("publisher: time to send out a data packet to sink %d\n", sink);
 

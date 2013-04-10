@@ -20,7 +20,7 @@
 
 /*---------------------------------------------------------------------------*/
 /* private functions */
-static void on_ondata(int sink, subid_t subid, void *data);
+static void on_ondata(short sink, subid_t subid, void *data);
 /*---------------------------------------------------------------------------*/
 /* private members */
 static struct pubsub_callbacks callbacks = {
@@ -37,7 +37,7 @@ static void on_resubscribe(void *subidp);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void subscriber_start(void (*cb)(subid_t subid, void *data)) {
-  int i;
+  subid_t i;
   on_reading = cb;
   pubsub_init(&callbacks);
 
@@ -64,7 +64,7 @@ void subscriber_unsubscribe(subid_t subid) {
 }
 
 const struct subscription *subscriber_subscription(subid_t subid) {
-  int mysinkid = pubsub_myid();
+  short mysinkid = pubsub_myid();
   if (mysinkid == -1) {
     return NULL;
   }
@@ -89,7 +89,7 @@ static void on_resubscribe(void *subidp) {
   ctimer_restart(&resubscribe[subid]);
   PRINTF("subscriber: timer reset\n");
 }
-static void on_ondata(int sink, subid_t subid, void *data) {
+static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("subscriber: got data for %d:%d\n", sink, subid);
   if (sink == pubsub_myid() && on_reading != NULL) {
     PRINTF("subscriber: oh, it's for us!\n");
