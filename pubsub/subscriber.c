@@ -49,7 +49,7 @@ void subscriber_start(void (*cb)(subid_t subid, void *data)) {
 subid_t subscriber_subscribe(struct subscription *s) {
   PRINTF("subscriber: adding new subscription\n");
   subid_t subid = pubsub_subscribe(s);
-  PRINTF("subscriber: got id %d, starting timer with interval %lu\n", subid, PUBSUB_RESEND_INTERVAL);
+  PRINTF("subscriber: new subscription is %d, rebroadcasting with interval %lu\n", subid, PUBSUB_RESEND_INTERVAL);
   ctimer_set(&resubscribe[subid], PUBSUB_RESEND_INTERVAL, &on_resubscribe, &is[subid]);
   return subid;
 }

@@ -163,11 +163,18 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
   packetbuf_set_datalen(s->buflen);
+  PRINTF("subnet: packetbuf thinks we're sending %d bytes\n", packetbuf_datalen());
 
-  PRINTF("subnet: publishing to %d.%d via %d.%d\n",
+  PRINTF("subnet: publishing %d bytes to %d.%d via %d.%d\n",
+      s->buflen,
       s->sink.u8[0], s->sink.u8[1],
       nexthop->u8[0], nexthop->u8[1]
       );
+
+  EACH_PACKET_FRAGMENT(
+    PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
+  );
+
   disclose_send(&c->pubsub, nexthop);
 
   /* store publish packet */
@@ -650,8 +657,10 @@ static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
 
   EACH_PACKET_FRAGMENT(
     if (frag->length > 0) {
-      PRINTF("subnet: %d bytes for %d\n", frag->length, subid);
+      PRINTF("subnet: %d: %d bytes for %d\n", fragi, frag->length, subid);
       c->u->ondata(c, sinkid, subid, payload);
+    } else {
+      PRINTF("subnet: ignoring empty fragment %i\n", fragi);
     }
   );
 }
