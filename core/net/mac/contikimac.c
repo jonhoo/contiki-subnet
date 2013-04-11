@@ -930,13 +930,9 @@ input_packet(void)
 #endif /* WITH_CONTIKIMAC_HEADER */
 
     if(packetbuf_datalen() > 0 &&
-       packetbuf_totlen() > 0 &&
-       (rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
-                     &rimeaddr_node_addr) ||
-        rimeaddr_cmp(packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
-                     &rimeaddr_null))) {
-      /* This is a regular packet that is destined to us or to the
-         broadcast address. */
+       packetbuf_totlen() > 0) {
+      /* Leave it up to the layer above to determine if the packet should be
+       * delivered or not */
 
       /* If FRAME_PENDING is set, we are receiving a packets in a burst */
       we_are_receiving_burst = packetbuf_attr(PACKETBUF_ATTR_PENDING);
@@ -989,7 +985,7 @@ input_packet(void)
       NETSTACK_MAC.input();
       return;
     } else {
-      PRINTDEBUG("contikimac: data not for us\n");
+      PRINTDEBUG("contikimac: empty packet\n");
     }
   } else {
     PRINTF("contikimac: failed to parse (%u)\n", packetbuf_totlen());
