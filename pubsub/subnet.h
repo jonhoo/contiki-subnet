@@ -273,20 +273,12 @@ void subnet_writein(struct subnet_conn *c);
 /*---------------------------------------------------------------------------*/
 /* things that shouldn't *really* be public, but have to be */
 /**
- * \brief Moves the given fragment pointer to the next fragment
- * \param raw Previous fragment pointer
+ * \brief Extracy payload for given fragment and return a pointer to the next
+ * \param frag Current fragment pointer
  * \param payload Pointer to make point to fragment contents
- *
- * This function deserves some explanation.
- * It takes a pointer to a fragment pointer and a pointer to a payload pointer.
- * The former should initially point to the first data byte in a packet, and the
- * latter to an empty void pointer.
- * After being called, the first pointer will point to the next fragment, and
- * payload will point to the data contained in this fragment.
- * This function should only be called as many times as there are fragments in
- * the packet.
+ * \return Pointer to next fragment
  */
-subid_t next_fragment(struct fragment **raw, void **payload);
+struct fragment *next_fragment(struct fragment *frag, void **payload);
 
 /**
  * \brief Get a pointer to the real sink struct for the given sink
@@ -312,7 +304,7 @@ const struct sink *subnet_sink(struct subnet_conn *c, short sinkid);
     void *payload;                                               \
                                                                  \
     for (fragi = 0; fragi < fragments; fragi++) {                \
-      next_fragment(&next, &payload);                            \
+      next = next_fragment(frag, &payload);                      \
       subid = frag->subid;                                       \
       BLOCK                                                      \
       frag = next;                                               \

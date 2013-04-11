@@ -215,16 +215,14 @@ short subnet_myid(struct subnet_conn *c) {
   return myid;
 }
 
-subid_t next_fragment(struct fragment **raw, void **payload) {
-  subid_t subid = (*raw)->subid;
-  dlen_t length = (*raw)->length;
+struct fragment *next_fragment(struct fragment *frag, void **payload) {
   /* move past subid + length */
-  *raw = *raw + 1;
+  struct fragment *next = frag + 1;
   /* we're now at the payload */
-  *payload = *raw;
+  *payload = next;
   /* move past (length of payload) bytes */
-  SKIPBYTES(*raw, struct fragment *, length);
-  return subid;
+  SKIPBYTES(next, struct fragment *, frag->length);
+  return next;
 }
 
 const struct sink *subnet_sink(struct subnet_conn *c, short sinkid) {
