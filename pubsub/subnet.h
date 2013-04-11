@@ -18,7 +18,7 @@
 #ifndef __SUBNET_H__
 #define __SUBNET_H__
 
-#include "net/rime/adisclose.h"
+#include "net/rime/disclose.h"
 #include "net/rime/rimeaddr.h"
 #include <stdbool.h>
 
@@ -52,7 +52,7 @@
                            { PACKETBUF_ATTR_EFRAGMENTS,   8*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ATTR_HOPS,         4*PACKETBUF_ATTR_BIT }, \
                            { PACKETBUF_ADDR_ERECEIVER,      PACKETBUF_ADDRSIZE }, \
-                             ADISCLOSE_ATTRIBUTES
+                             DISCLOSE_ATTRIBUTES
 
 #ifdef SUBNET_CONF_REVOKE_PERIOD
 #define SUBNET_REVOKE_PERIOD SUBNET_CONF_REVOKE_PERIOD
@@ -118,8 +118,8 @@ struct sink {
  * \brief Subnet connection state
  */
 struct subnet_conn {
-  struct adisclose_conn pubsub;     /* connection for pub/sub messages */
-  struct adisclose_conn peer;       /* connection for P2P subscription info */
+  struct disclose_conn pubsub;     /* connection for pub/sub messages */
+  struct disclose_conn peer;       /* connection for P2P subscription info */
   const struct subnet_callbacks *u; /* callbacks */
   subid_t subid;                        /* last sent subscription id */
 

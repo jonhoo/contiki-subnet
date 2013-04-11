@@ -42,7 +42,7 @@ static const struct packetbuf_attrlist attributes[] = {
 /* private functions */
 static short find_sinkid(struct subnet_conn *c, const rimeaddr_t *sink);
 static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route, const rimeaddr_t *prevto);
-static void broadcast(struct adisclose_conn *c);
+static void broadcast(struct disclose_conn *c);
 static bool is_known(struct subnet_conn *c, short sinkid, subid_t subid);
 static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink);
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
@@ -52,25 +52,22 @@ static void clean_buffers(struct subnet_conn *c, struct sink *s);
 static bool inject_packetbuf(subid_t subid, dlen_t bytes, uint8_t *fragments, dlen_t *buflen, void *payload, void *buf);
 static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops);
 
-static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from);
-static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from);
-static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from);
-static void on_timedout(struct adisclose_conn *adisclose, const rimeaddr_t *to);
-static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to);
+static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from);
+static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from);
+static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from);
+static void on_sent(struct disclose_conn *disclose, int status);
 /*---------------------------------------------------------------------------*/
 /* private members */
-static const struct adisclose_callbacks subnet = {
+static const struct disclose_callbacks subnet = {
   on_recv,
-  on_sent,
-  on_timedout,
   on_hear,
+  on_sent
 };
 
-static const struct adisclose_callbacks peer = {
+static const struct disclose_callbacks peer = {
   on_peer,
-  NULL,
-  NULL,
   on_peer,
+  NULL
 };
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
@@ -78,8 +75,8 @@ void subnet_open(struct subnet_conn *c,
                  uint16_t subchannel,
                  uint16_t peerchannel,
                  const struct subnet_callbacks *u) {
-  adisclose_open(&c->pubsub, subchannel, &subnet);
-  adisclose_open(&c->peer, peerchannel, &peer);
+  disclose_open(&c->pubsub, subchannel, &subnet);
+  disclose_open(&c->peer, peerchannel, &peer);
   channel_set_attributes(subchannel, attributes);
   channel_set_attributes(peerchannel, attributes);
   c->u = u;
@@ -94,8 +91,8 @@ void subnet_close(struct subnet_conn *c) {
   /* TODO: perhaps do this multiple times for good measure? */
   broadcast(&c->pubsub);
 
-  adisclose_close(&c->pubsub);
-  adisclose_close(&c->peer);
+  disclose_close(&c->pubsub);
+  disclose_close(&c->peer);
 }
 
 bool subnet_add_data(struct subnet_conn *c, short sinkid, subid_t subid, void *payload, dlen_t bytes) {
@@ -166,11 +163,11 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
 
-  adisclose_send(&c->pubsub, nexthop);
   PRINTF("subnet: publishing to %d.%d via %d.%d\n",
       s->sink.u8[0], s->sink.u8[1],
       nexthop->u8[0], nexthop->u8[1]
       );
+  disclose_send(&c->pubsub, nexthop);
 
   /* store publish packet */
   c->sentpacket = queuebuf_new_from_packetbuf();
@@ -341,17 +338,8 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
   return &next->node->addr;
 }
 
-static void broadcast(struct adisclose_conn *c) {
-  if (adisclose_is_transmitting(c)) {
-    PRINTF("subnet: broadcast aborted - adisclose is transmitting\n");
-    return;
-  }
-
-  /* note that we can use disclose here since we don't need any callbacks,
-   * adisclose has no disclose callback on send and adisclose_conn has
-   * disclose_conn as its first member. We use disclose rather than adisclose
-   * since this is a broadcast and we don't want to wait for ACKs */
-  disclose_send((struct disclose_conn *) c, &rimeaddr_null);
+static void broadcast(struct disclose_conn *c) {
+  disclose_send(c, &rimeaddr_null);
 }
 
 /* because REVOKED subscriptions are still known */
@@ -544,10 +532,10 @@ static void clean_buffers(struct subnet_conn *c, struct sink *s) {
 }
 /*---------------------------------------------------------------------------*/
 /* private callback function definitions */
-static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
-  /* peer points to second adisclose_conn, so we need to decrement to cast to
+static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
+  /* peer points to second disclose_conn, so we need to decrement to cast to
    * subnet_conn */
-  struct subnet_conn *c = (struct subnet_conn *)(adisclose-1);
+  struct subnet_conn *c = (struct subnet_conn *)(disclose-1);
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_ASK) {
@@ -623,7 +611,7 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
     }
 
     /* packetbuf now holds info about subscription */
-    adisclose_send(&c->peer, from);
+    disclose_send(&c->peer, from);
 
   } else if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_REPLY) {
     PRINTF("subnet: heard peer reply packet from %d.%d\n", from->u8[0], from->u8[1]);
@@ -639,8 +627,8 @@ static void on_peer(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
  * hop to forward towards the sink, so forward. Subscription must be known to us
  * here since otherwise we wouldn't be next hop.
  */
-static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
-  struct subnet_conn *c = (struct subnet_conn *)adisclose;
+static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
+  struct subnet_conn *c = (struct subnet_conn *)disclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
   short sinkid;
   struct sink *s;
@@ -675,8 +663,8 @@ static void on_recv(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
  * If it is a publish and the subscription is unknown, ask peer for it.
  * If it is a subscribe and the subscription is unknown, add subscription.
  */
-static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
-  struct subnet_conn *c = (struct subnet_conn *)adisclose;
+static void on_hear(struct disclose_conn *disclose, const rimeaddr_t *from) {
+  struct subnet_conn *c = (struct subnet_conn *)disclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
 
   if (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE) {
@@ -753,53 +741,53 @@ static void on_hear(struct adisclose_conn *adisclose, const rimeaddr_t *from) {
       packetbuf_set_datalen(written + p.unknown * sizeof(subid_t));
 
       /* send and restore */
-      if (!adisclose_is_transmitting(adisclose)) {
-        /* TODO: Avoid congestion if all neighbours also send ask */
-        /* this can be sent without an ack */
-        disclose_send(&c->peer.c, from);
-      }
+      /* TODO: Avoid congestion if all neighbours also send ask */
+      disclose_send(&c->peer, from);
     }
   }
-}
-
-/**
- * Called if a forwarding/sending failed. Should try next host in alternate list
- * or call errpub callback if no more alternates are available
- */
-static void on_timedout(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
-  struct subnet_conn *c = (struct subnet_conn *)adisclose;
-  const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  short sinkid = find_sinkid(c, sink);
-  struct sink *s = &c->sinks[sinkid];
-  const rimeaddr_t *nexthop = get_next_hop(c, s, to);
-
-  PRINTF("subnet: send to %d.%d via %d.%d failed\n",
-      sink->u8[0], sink->u8[1],
-      to->u8[0], to->u8[1]);
-
-  if (nexthop == NULL) {
-    PRINTF("subnet: no next hop to try, flailing\n");
-    clean_buffers(c, s);
-    if (c->u->errpub != NULL) {
-      c->u->errpub(c);
-    }
-
-    return;
-  }
-
-  queuebuf_to_packetbuf(c->sentpacket);
-  adisclose_send(&c->pubsub, nexthop);
 }
 
 /**
  * Called if a forwarding/sending succeeded. Should result in an upstream
  * callback
  */
-static void on_sent(struct adisclose_conn *adisclose, const rimeaddr_t *to) {
-  struct subnet_conn *c = (struct subnet_conn *)adisclose;
+static void on_sent(struct disclose_conn *disclose, int status) {
+  struct subnet_conn *c = (struct subnet_conn *)disclose;
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
-  int sinkid = find_sinkid(c, sink);
+  const rimeaddr_t *prevto = packetbuf_addr(PACKETBUF_ADDR_RECEIVER);
+  const rimeaddr_t *nexthop;
+  short sinkid = find_sinkid(c, sink);
   struct sink *s = &c->sinks[sinkid];
+
+  if (!rimeaddr_cmp(prevto, &rimeaddr_null) && status != MAC_TX_OK) {
+    nexthop = get_next_hop(c, s, prevto);
+    PRINTF("subnet: send to %d.%d via %d.%d failed\n",
+        sink->u8[0], sink->u8[1],
+        prevto->u8[0], prevto->u8[1]);
+
+    if (nexthop == NULL) {
+      PRINTF("subnet: no next hop to try, flailing\n");
+      clean_buffers(c, s);
+      if (c->u->errpub != NULL) {
+        c->u->errpub(c);
+      }
+
+      return;
+    }
+
+    PRINTF("subnet: trying %d.%d instead\n",
+        nexthop->u8[0], nexthop->u8[1]);
+
+    queuebuf_to_packetbuf(c->sentpacket);
+    disclose_send(&c->pubsub, nexthop);
+    return;
+  }
+
+  if (status == MAC_TX_OK) {
+    PRINTF("subnet: packet sent successfully\n");
+  } else {
+    PRINTF("subnet: packet failed to send, but doesn't matter\n");
+  }
 
   clean_buffers(c, s);
   if (c->u->onsent == NULL) {

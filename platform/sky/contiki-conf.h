@@ -31,7 +31,7 @@
 #endif /* NETSTACK_CONF_FRAMER */
 
 #ifndef CC2420_CONF_AUTOACK
-#define CC2420_CONF_AUTOACK              0
+#define CC2420_CONF_AUTOACK              1
 #endif /* CC2420_CONF_AUTOACK */
 
 /* Specify whether the RDC layer should enable
