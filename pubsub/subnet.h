@@ -296,6 +296,12 @@ subid_t next_fragment(struct fragment **raw, void **payload);
  */
 const struct sink *subnet_sink(struct subnet_conn *c, short sinkid);
 
+/**
+ * \brief Run the given BLOCK for all FRAGMENTS fragments in the given BUF
+ * \param FRAGMENTS Expression evaluating to the number of fragments in BUF
+ * \param BUF Expression evaluating to a buffer pointer
+ * \param BLOCK Code to run for each fragment. CANNOT CONTAIN BREAK/CONTINUE!
+ */
 #define EACH_FRAGMENT(FRAGMENTS, BUF, BLOCK) \
   { \
     short fragi;                                                 \
@@ -313,6 +319,11 @@ const struct sink *subnet_sink(struct subnet_conn *c, short sinkid);
     } \
   }
 
+/**
+ * \brief Run the given BLOCK for each fragment in the given sink's buffer
+ * \param S Expression evaluating to a pointer to the sink
+ * \param BLOCK Code to run for each fragment. CANNOT CONTAIN BREAK/CONTINUE!
+ */
 #define EACH_SINK_FRAGMENT(S, BLOCK) \
   EACH_FRAGMENT(S->fragments, S->buf, BLOCK)
 /*---------------------------------------------------------------------------*/

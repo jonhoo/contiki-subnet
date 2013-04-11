@@ -142,11 +142,11 @@ uint8_t extract_data(short sink, subid_t sid, void *payloads[]) {
 
   EACH_SINK_FRAGMENT(s,
     PRINTF("pubsub: hit value for %d with size %d\n", subid, frag->length);
-    if (subid != sid) continue;
-    if (frag->length == 0) continue;
-    PRINTF("pubsub: extracted.\n");
-    payloads[num] = payload;
-    num++;
+    if (subid == sid && frag->length != 0) {
+      PRINTF("pubsub: extracted.\n");
+      payloads[num] = payload;
+      num++;
+    }
   );
 
   return num;
