@@ -8,7 +8,6 @@
 #include "contiki.h"
 #include "lib/subscriber.h"
 #include "pubsub-config.h"
-#include "callbacks.c"
 #include <stdio.h>
 #include <string.h>
 /*---------------------------------------------------------------------------*/

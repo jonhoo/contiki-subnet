@@ -10,7 +10,9 @@
 #include "lib/publisher.h"
 #include "lib/random.h"
 #include <stdio.h>
-#include "callbacks.c"
+#include <stdlib.h>
+/*---------------------------------------------------------------------------*/
+struct location node_location;
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
 AUTOSTART_PROCESSES(&node_process);
@@ -33,6 +35,9 @@ static pressure *get_pressure(struct location *l) {
   printf("pressure @ <%03d, %03d> = %d\n", p.location.x, p.location.y, (int)p.value);
   return &p;
 }
+bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data);
+bool hard_filter_proxy(struct hfilter *f);
+void aggregator_proxy(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]);
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(node_process, ev, data)
 {
@@ -67,5 +72,29 @@ PROCESS_THREAD(node_process, ev, data)
   }
 
   PROCESS_END();
+}
+/*---------------------------------------------------------------------------*/
+/* proxy callbacks */
+bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
+  return false;
+}
+
+bool hard_filter_proxy(struct hfilter *f) {
+  struct location *v, *n;
+  switch (f->filter) {
+    case BE_CLOSE_TO:
+      v = &f->arg.loc;
+      n = &node_location;
+
+      if (abs(n->x - v->x) > 10) return true;
+      if (abs(n->y - v->y) > 10) return true;
+      /* fall-through */
+    default:
+      return false;
+  }
+}
+
+void aggregator_proxy(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]) {
+  return;
 }
 /*---------------------------------------------------------------------------*/

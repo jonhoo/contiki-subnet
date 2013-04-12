@@ -7,7 +7,6 @@
 
 #include "contiki.h"
 #include "lib/subscriber.h"
-#include "callbacks.c"
 #include <stdio.h>
 #include <string.h>
 /*---------------------------------------------------------------------------*/
