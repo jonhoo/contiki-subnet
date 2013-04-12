@@ -209,6 +209,9 @@ static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void 
   if (state.u->on_subscription != NULL) {
     state.u->on_subscription(s);
   }
+
+  /* TODO: hard filtering should somehow prevent this from being forwarded to
+   * neighbors */
 }
 
 static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid) {
