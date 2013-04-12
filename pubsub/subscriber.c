@@ -92,6 +92,7 @@ static void on_resubscribe(void *subidp) {
 }
 static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("subscriber: got data for %d:%d\n", sink, subid);
+  /* TODO: If subscription is revoked, rebroadcast unsubscription */
   if (sink == pubsub_myid() && on_reading != NULL) {
     PRINTF("subscriber: oh, it's for us!\n");
     on_reading(subid, data);
