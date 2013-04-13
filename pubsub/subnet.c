@@ -489,31 +489,25 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
 
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from) {
   bool subscribe = (packetbuf_attr(PACKETBUF_ATTR_EPACKET_TYPE) == SUBNET_PACKET_TYPE_SUBSCRIBE);
+  bool broadcasted = false;
+  short sinkid;
 
   if (c->u->exists == NULL) {
-    PRINTF("subnet: no exists function in callbacks, giving up...\n");
     return;
   }
 
   update_routes(c, sink, from);
-  short sinkid = find_sinkid(c, sink);
+  sinkid = find_sinkid(c, sink);
 
   EACH_PACKET_FRAGMENT(
     if (!is_known(c, sinkid, subid) == subscribe) {
-      PRINTF("subnet: subscription %d has changed in packet, forwarding...\n", subid);
-      /* something changed, send new subscription to neighbours */
-      broadcast(&c->pubsub);
-      break;
-    }
-  );
+      if (!broadcasted) {
+        PRINTF("subnet: new subscription (%d) in packet, forwarding...\n", subid);
+        /* something changed, send new subscription to neighbours */
+        broadcast(&c->pubsub);
+        broadcasted = true;
+      }
 
-  if (c->u->subscribe == NULL) {
-    PRINTF("subnet: no subscribe function in callbacks, giving up...\n");
-    return;
-  }
-
-  EACH_PACKET_FRAGMENT(
-    if (!is_known(c, sinkid, subid) == subscribe) {
       if (subscribe) {
         PRINTF("subnet: packet contained new subscription %d\n", subid);
         c->u->subscribe(c, sinkid, subid, payload);
