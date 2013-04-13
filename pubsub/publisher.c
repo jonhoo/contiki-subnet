@@ -192,10 +192,10 @@ static void on_ondata(short sink, subid_t subid, void *data) {
   aggregate_trigger(sink, added_data);
 }
 static void on_errpub() {
-  /* TODO */
+  PRINTF("publisher: data publishing failed - could not forward packet\n");
 }
 static void on_onsent(short sink, subid_t subid) {
-  /* TODO */
+  PRINTF("publisher: data published successfully\n");
 }
 static void set_needs(enum reading_type t, bool need) {
   bool n = needs[t];
