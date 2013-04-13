@@ -211,8 +211,14 @@ void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
   prepare_packetbuf(SUBNET_PACKET_TYPE_UNSUBSCRIBE, &rimeaddr_node_addr, 0);
   inject_packetbuf(subid, 0, NULL, NULL, NULL, NULL);
 
-  PRINTF("subnet: unsubscribing from %d\n", subid);
-  broadcast(&c->pubsub);
+  if (is_known(c, subnet_myid(c), subid)) {
+    PRINTF("subnet: revoking subscription %d\n", subid);
+    handle_subscriptions(c, &rimeaddr_node_addr, &rimeaddr_null);
+    // handle_subscriptions will take care of the broadcast
+  } else {
+    PRINTF("subnet: re-broadcasting unsubscription for %d\n", subid);
+    broadcast(&c->pubsub);
+  }
 }
 
 short subnet_myid(struct subnet_conn *c) {

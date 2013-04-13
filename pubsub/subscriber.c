@@ -83,19 +83,32 @@ void subscriber_close() {
 /*---------------------------------------------------------------------------*/
 /* private function definitions */
 static void on_resubscribe(void *subidp) {
-  /* TODO: subscribe to unsubscriptions too */
   subid_t subid = *((subid_t *)subidp);
   PRINTF("subscriber: resubscribing to %d\n", subid);
   pubsub_resubscribe(subid);
   ctimer_restart(&resubscribe[subid]);
   PRINTF("subscriber: timer restarted\n");
 }
+static void repeatunsubscribe(void *subidp) {
+  subid_t subid = *((subid_t *)subidp);
+  printf("subscriber: rebroadcasting unsubscription for %d\n", subid);
+  pubsub_unsubscribe(subid);
+}
 static void on_ondata(short sink, subid_t subid, void *data) {
+  struct esubscription *s;
+
   PRINTF("subscriber: got data for %d:%d\n", sink, subid);
-  /* TODO: If subscription is revoked, rebroadcast unsubscription */
-  if (sink == pubsub_myid() && on_reading != NULL) {
-    PRINTF("subscriber: oh, it's for us!\n");
-    on_reading(subid, data);
+  if (sink == pubsub_myid()) {
+    s = find_subscription(sink, subid);
+    if (!is_active(s)) {
+      PRINTF("subscriber: subscription was revoked, preparing to send revocation");
+      ctimer_set(&resubscribe[subid], CLOCK_SECOND, &repeatunsubscribe, &is[subid]);
+    } else {
+      PRINTF("subscriber: oh, it's for us!\n");
+      if (on_reading != NULL) {
+        on_reading(subid, data);
+      }
+    }
   }
 }
 /*---------------------------------------------------------------------------*/
