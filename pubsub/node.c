@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
+#define AVG(a,b) ((a+b)/2)
 struct location node_location;
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
@@ -117,8 +118,38 @@ bool hard_filter_proxy(struct hfilter *f) {
   }
 }
 
-void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]) {
-  switch (a->aggregator) {
+void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t items, void *datas[]) {
+  switch (agg->aggregator) {
+    case LOCATION_AVG:
+    {
+      struct locshort *a,*b;
+      int i, j, changes;
+      do {
+        changes = 0;
+        for (i = 0; i < items; i++) {
+          a = (struct locshort *) datas[i];
+          if (a == NULL) continue;
+          for (j = i+1; j < items; j++) {
+            b = (struct locshort *) datas[j];
+            if (b == NULL) continue;
+            if (abs(a->location.x - b->location.x) > agg->arg.maxdist) continue;
+            if (abs(a->location.y - b->location.y) > agg->arg.maxdist) continue;
+
+            a->value = AVG(a->value, b->value);
+            a->location.x = AVG(a->location.x, b->location.x);
+            a->location.y = AVG(a->location.y, b->location.y);
+            datas[j] = NULL;
+            changes++;
+          }
+        }
+      } while (changes != 0);
+
+      for (i = 0; i < items; i++) {
+        if (datas[i] == NULL) continue;
+        pubsub_add_data(sink, subid, datas[i], sizeof(struct locshort));
+      }
+      break;
+    }
     default:
       for (; items >= 0; items--) {
         pubsub_add_data(sink, subid, datas[items], sizeof(struct locshort));

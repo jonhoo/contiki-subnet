@@ -38,11 +38,12 @@ union hard_arg {
 };
 
 enum aggregator_t {
-  NO_AGGREGATION
+  NO_AGGREGATION,
+  LOCATION_AVG
 };
 
 union aggregator_arg {
-  short distance;
+  short maxdist;
 };
 /*---------------------------------------------------------------------------*/
 #endif /* __PUBSUB_CONF_H__ */
