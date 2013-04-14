@@ -16,17 +16,17 @@
 /*---------------------------------------------------------------------------*/
 static void on_reading(subid_t subid, void *data) {
   const struct subscription *s = subscriber_subscription(subid);
+  struct locshort r;
+  memcpy(&r, data, sizeof(struct locshort));
   switch (s->sensor) {
     case READING_HUMIDITY:
     {
-      humidity *h = (humidity *)data;
-      printf("got humidity reading %d @ <%03d, %03d>\n", (int)h->value, h->location.x, h->location.y);
+      printf("got humidity reading %d @ <%03d, %03d>\n", r.value, r.location.x, r.location.y);
       break;
     }
     case READING_PRESSURE:
     {
-      pressure *p = (pressure *)data;
-      printf("got pressure reading %d @ <%03d, %03d>\n", (int)p->value, p->location.x, p->location.y);
+      printf("got pressure reading %d @ <%03d, %03d>\n", r.value, r.location.x, r.location.y);
       break;
     }
   }
