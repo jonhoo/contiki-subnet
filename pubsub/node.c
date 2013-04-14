@@ -83,6 +83,8 @@ bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
       struct locshort *l = (struct locshort *) data;
       short sum = 0;
 
+      prevs[t][old[t]] = l->value;
+      old[t] = (old[t] + 1) % 5;
       if (num[t] < 5) return false;
       for (i = 0; i < num[t]; i++) {
         sum += prevs[t][i];
@@ -93,7 +95,6 @@ bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
       }
       if (num[t] < 5) num[t]++;
       prevs[t][old[t]] = l->value;
-      old[t] = (old[t] + 1) % 5;
       /* fall-through */
     }
     default:
