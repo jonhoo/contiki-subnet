@@ -91,7 +91,7 @@ static void on_resubscribe(void *subidp) {
 }
 static void repeatunsubscribe(void *subidp) {
   subid_t subid = *((subid_t *)subidp);
-  printf("subscriber: rebroadcasting unsubscription for %d\n", subid);
+  PRINTF("subscriber: rebroadcasting unsubscription for %d\n", subid);
   pubsub_unsubscribe(subid);
 }
 static void on_ondata(short sink, subid_t subid, void *data) {
