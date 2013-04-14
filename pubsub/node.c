@@ -73,7 +73,32 @@ PROCESS_THREAD(node_process, ev, data)
 /*---------------------------------------------------------------------------*/
 /* proxy callbacks */
 bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
-  return false;
+  static short prevs[PUBSUB_MAX_SENSORS][5];
+  static uint8_t num[PUBSUB_MAX_SENSORS];
+  static uint8_t old[PUBSUB_MAX_SENSORS];
+  switch (f->filter) {
+    case DEVIATION:
+    {
+      uint8_t i;
+      struct locshort *l = (struct locshort *) data;
+      short sum = 0;
+
+      if (num[t] < 5) return false;
+      for (i = 0; i < num[t]; i++) {
+        sum += prevs[t][i];
+      }
+
+      if (abs(sum/num[t] - l->value) < f->arg.deviation) {
+        return true;
+      }
+      if (num[t] < 5) num[t]++;
+      prevs[t][old[t]] = l->value;
+      old[t] = (old[t] + 1) % 5;
+      /* fall-through */
+    }
+    default:
+      return false;
+  }
 }
 
 bool hard_filter_proxy(struct hfilter *f) {
@@ -92,6 +117,11 @@ bool hard_filter_proxy(struct hfilter *f) {
 }
 
 void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]) {
-  return;
+  switch (a->aggregator) {
+    default:
+      for (; items >= 0; items--) {
+        pubsub_add_data(sink, subid, datas[items], sizeof(struct locshort));
+      }
+  }
 }
 /*---------------------------------------------------------------------------*/

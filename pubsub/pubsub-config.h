@@ -20,7 +20,8 @@ enum reading_type {
 };
 
 enum soft_filter  {
-  NO_SOFT_FILTER
+  NO_SOFT_FILTER,
+  DEVIATION
 };
 
 union soft_arg {
