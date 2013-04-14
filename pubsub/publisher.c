@@ -52,13 +52,13 @@ static uint8_t numneeds;
 
 static bool (* soft_filter)(struct sfilter *f, enum reading_type t, void *data);
 static bool (* hard_filter)(struct hfilter *f);
-static void (* aggregator)(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]);
+static void (* aggregator)(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]);
 /*---------------------------------------------------------------------------*/
 /* public function definitions */
 void publisher_start(
   bool (* soft_filter_proxy)(struct sfilter *f, enum reading_type t, void *data),
   bool (* hard_filter_proxy)(struct hfilter *f),
-  void (* aggregator_proxy)(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]),
+  void (* aggregator_proxy)(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]),
   clock_time_t agg_interval
 ) {
   clock_time_t max = (~((clock_time_t)0) / 2);
@@ -250,7 +250,7 @@ static void on_aggregate_timer_expired(void *sinkp) {
         }
       } else {
         PRINTF("publisher: calling aggregator for %d values in subscription %d\n", num, subid);
-        aggregator(&sub->in.aggregator, sub, num, payloads);
+        aggregator(&sub->in.aggregator, sink, subid, num, payloads);
         /* aggregator will call pubsub_add_data(sink, subid, ...) */
       }
     }

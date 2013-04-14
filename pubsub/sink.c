@@ -46,7 +46,7 @@ PROCESS_THREAD(sink_process, ev, data)
   /* no special stuff here */
   s.soft.filter = NO_SOFT_FILTER;
   s.hard.filter = NO_HARD_FILTER;
-  s.aggregator.a = NO_AGGREGATION;
+  s.aggregator.aggregator = NO_AGGREGATION;
 
   /* subscribe to humidity */
   s.interval = 15*CLOCK_SECOND;

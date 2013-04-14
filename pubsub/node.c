@@ -34,7 +34,7 @@ static pressure *get_pressure(struct location *l) {
 }
 bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data);
 bool hard_filter_proxy(struct hfilter *f);
-void aggregator_proxy(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]);
+void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]);
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(node_process, ev, data)
 {
@@ -91,7 +91,7 @@ bool hard_filter_proxy(struct hfilter *f) {
   }
 }
 
-void aggregator_proxy(struct aggregator *a, struct esubscription *s, uint8_t items, void *datas[]) {
+void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t items, void *datas[]) {
   return;
 }
 /*---------------------------------------------------------------------------*/

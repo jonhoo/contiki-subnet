@@ -37,7 +37,7 @@ struct hfilter {
   union hard_arg   arg;
 };
 struct aggregator {
-  enum aggregator_t    a;
+  enum aggregator_t    aggregator;
   union aggregator_arg arg;
 };
 struct subscription {
