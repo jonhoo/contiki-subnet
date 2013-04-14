@@ -6,12 +6,12 @@ struct location {
   short x;
   short y;
 };
-struct locdouble {
+struct locshort {
   struct location location;
-  double value;
+  short value;
 };
-typedef struct locdouble humidity;
-typedef struct locdouble pressure;
+typedef struct locshort humidity;
+typedef struct locshort pressure;
 /*---------------------------------------------------------------------------*/
 /* middleware types */
 enum reading_type {
@@ -24,7 +24,7 @@ enum soft_filter  {
 };
 
 union soft_arg {
-  double reading;
+  short deviation;
 };
 
 enum hard_filter {
@@ -41,7 +41,7 @@ enum aggregator_t {
 };
 
 union aggregator_arg {
-  double distance;
+  short distance;
 };
 /*---------------------------------------------------------------------------*/
 #endif /* __PUBSUB_CONF_H__ */
