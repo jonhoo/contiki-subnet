@@ -12,7 +12,6 @@
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 #define MAX(a,b) (a>b?a:b)
-#define MIN_DEVIATION 1000
 /*---------------------------------------------------------------------------*/
 static void on_reading(subid_t subid, void *data) {
   const struct subscription *s = subscriber_subscription(subid);
@@ -45,11 +44,9 @@ PROCESS_THREAD(sink_process, ev, data)
   subscriber_start(&on_reading);
 
   /* no special stuff here */
-  s.soft.filter = DEVIATION;
-  s.soft.arg.deviation = MIN_DEVIATION;
+  s.soft.filter = NO_SOFT_FILTER;
   s.hard.filter = NO_HARD_FILTER;
-  s.aggregator.aggregator = LOCATION_AVG;
-  s.aggregator.arg.maxdist = 10;
+  s.aggregator.aggregator = NO_AGGREGATION;
 
   /* subscribe to humidity */
   s.interval = 15*CLOCK_SECOND;
