@@ -21,7 +21,7 @@ static humidity *get_humidity(struct location *l) {
   static humidity h;
   h.location.x = l->x;
   h.location.y = l->y;
-  h.value = random_rand();
+  h.value = random_rand() % 25;
   printf("humidity @ <%03d, %03d> = %d\n", h.location.x, h.location.y, (int)h.value);
   return &h;
 }
@@ -29,7 +29,7 @@ static pressure *get_pressure(struct location *l) {
   static pressure p;
   p.location.x = l->x;
   p.location.y = l->y;
-  p.value = random_rand();
+  p.value = random_rand() % 25;
   printf("pressure @ <%03d, %03d> = %d\n", p.location.x, p.location.y, (int)p.value);
   return &p;
 }

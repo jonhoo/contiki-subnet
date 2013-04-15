@@ -8,7 +8,7 @@ struct location {
 };
 struct locshort {
   struct location location;
-  short value;
+  unsigned short value;
 };
 typedef struct locshort humidity;
 typedef struct locshort pressure;
