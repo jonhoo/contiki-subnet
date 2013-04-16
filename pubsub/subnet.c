@@ -516,6 +516,7 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
       if (!broadcasted) {
         PRINTF("subnet: new subscription (%d) in packet, forwarding...\n", subid);
         /* something changed, send new subscription to neighbours */
+        packetbuf_set_attr(PACKETBUF_ATTR_HOPS, packetbuf_attr(PACKETBUF_ATTR_HOPS)+1);
         broadcast(&c->pubsub);
         broadcasted = true;
       }
