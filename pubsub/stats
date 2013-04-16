@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+CWD=`pwd`
+cd "$1"
+
+if [ -e "recv.log" ]; then
+  rm "recv.log" "packets.log" "sense.log"
+fi
+
+sed -r -n -e '/got:/p' "raw.log" > "recv.log"
+sed -i 's/got: //' "recv.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "recv.log"
+
+sed -r -n -e '/contikimac: send \(/p' "raw.log" > "packets.log"
+sed -i 's/contikimac: //' "packets.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "packets.log"
+sed -r -i 's/send \(strobes=[0-9]*, len=([0-9]*), .*/\1/' "packets.log"
+
+sed -r -n -e '/sense:/p' "raw.log" > "sense.log"
+sed -i 's/sense: //' "sense.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "sense.log"
+
+echo -n "Number of packets: "
+cat "packets.log" | wc -l
+
+echo -n "Total bytes sent: "
+cat "packets.log" | paste -sd+ - | bc
+
+echo "Packet stats:"
+R -q -e "x <- read.csv('packets.log', header = F); summary(x); sd(x[ , 1])" |
+grep -v ">" | grep -v "V1" | sed -e 's/\[1\] / Stddev.:/'
+cd "$CWD"
