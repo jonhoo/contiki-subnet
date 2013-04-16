@@ -425,7 +425,12 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
 
       memset(route, 0, sizeof(struct sink));
       rimeaddr_copy(&route->sink, sink);
-      route->advertised_cost = cost + 1;
+      if (rimeaddr_cmp(from, &rimeaddr_null)) {
+        route->advertised_cost = 0;
+      } else {
+        route->advertised_cost = cost + 1;
+      }
+      PRINTF("subnet: advertised cost will be %d\n", route->advertised_cost);
     }
   }
 
@@ -477,9 +482,10 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
     }
   }
 
-  /* if *from was not stored as a next hop for sink and it is indeed a *next*
+  /* if from was not stored as a next hop for sink and it is indeed a *next*
    * hop, add it (or replace with oldest) */
   if (n != NULL && cost <= route->advertised_cost) {
+    PRINTF("subnet: viable next hop for %d.%d found (%d <= %d)\n", sink->u8[0], sink->u8[1], cost, route->advertised_cost);
     if (route->numhops < SUBNET_MAX_ALTERNATE_ROUTES) {
       replace = &route->nexthops[route->numhops];
       route->numhops++;
