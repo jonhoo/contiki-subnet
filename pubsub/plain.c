@@ -20,12 +20,12 @@ static void on_reading(subid_t subid, void *data) {
   switch (s->sensor) {
     case READING_HUMIDITY:
     {
-      printf("got humidity reading %d @ <%03d, %03d>\n", r.value, r.location.x, r.location.y);
+      printf("got humidity @ <%03d, %03d> = %d\n", r.location.x, r.location.y, r.value);
       break;
     }
     case READING_PRESSURE:
     {
-      printf("got pressure reading %d @ <%03d, %03d>\n", r.value, r.location.x, r.location.y);
+      printf("got pressure @ <%03d, %03d> = %d\n", r.location.x, r.location.y, r.value);
       break;
     }
   }

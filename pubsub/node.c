@@ -22,7 +22,7 @@ static humidity *get_humidity(struct location *l) {
   h.location.x = l->x;
   h.location.y = l->y;
   h.value = random_rand() % 25;
-  printf("humidity @ <%03d, %03d> = %d\n", h.location.x, h.location.y, (int)h.value);
+  printf("humidity @ <%03d, %03d> = %d\n", h.location.x, h.location.y, h.value);
   return &h;
 }
 static pressure *get_pressure(struct location *l) {
@@ -30,7 +30,7 @@ static pressure *get_pressure(struct location *l) {
   p.location.x = l->x;
   p.location.y = l->y;
   p.value = random_rand() % 25;
-  printf("pressure @ <%03d, %03d> = %d\n", p.location.x, p.location.y, (int)p.value);
+  printf("pressure @ <%03d, %03d> = %d\n", p.location.x, p.location.y, p.value);
   return &p;
 }
 bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data);
