@@ -767,44 +767,49 @@ static void on_sent(struct disclose_conn *disclose, int status) {
   short sinkid = find_sinkid(c, sink);
   struct sink *s = &c->sinks[sinkid];
 
-  if (!rimeaddr_cmp(prevto, &rimeaddr_null) && status != MAC_TX_OK) {
-    nexthop = get_next_hop(c, s, prevto);
-    PRINTF("subnet: send to %d.%d via %d.%d failed\n",
-        sink->u8[0], sink->u8[1],
-        prevto->u8[0], prevto->u8[1]);
+  if (!rimeaddr_cmp(prevto, &rimeaddr_null)) {
+    if (status != MAC_TX_OK) {
+      nexthop = get_next_hop(c, s, prevto);
+      PRINTF("subnet: send to %d.%d via %d.%d failed\n",
+          sink->u8[0], sink->u8[1],
+          prevto->u8[0], prevto->u8[1]);
 
-    if (nexthop == NULL) {
-      PRINTF("subnet: no next hop to try, flailing\n");
-      clean_buffers(c, s);
-      if (c->u->errpub != NULL) {
-        c->u->errpub(c);
+      if (nexthop == NULL) {
+        PRINTF("subnet: no next hop to try, flailing\n");
+        clean_buffers(c, s);
+        if (c->u->errpub != NULL) {
+          c->u->errpub(c);
+        }
+
+        return;
       }
 
+      PRINTF("subnet: trying %d.%d instead\n",
+          nexthop->u8[0], nexthop->u8[1]);
+
+      queuebuf_to_packetbuf(c->sentpacket);
+      disclose_send(&c->pubsub, nexthop);
       return;
     }
 
-    PRINTF("subnet: trying %d.%d instead\n",
-        nexthop->u8[0], nexthop->u8[1]);
-
-    queuebuf_to_packetbuf(c->sentpacket);
-    disclose_send(&c->pubsub, nexthop);
-    return;
-  }
-
-  if (status == MAC_TX_OK) {
     PRINTF("subnet: packet sent successfully\n");
+
+    clean_buffers(c, s);
+    if (c->u->onsent == NULL) {
+      return;
+    }
+
+    EACH_SINK_FRAGMENT(s,
+      c->u->onsent(c, sinkid, subid);
+    );
+
   } else {
-    PRINTF("subnet: packet failed to send, but doesn't matter\n");
+    if (status == MAC_TX_OK) {
+      PRINTF("subnet: broadcast packet sent successfully\n");
+    } else {
+      PRINTF("subnet: broadcast packet failed to send, but doesn't matter\n");
+    }
   }
-
-  clean_buffers(c, s);
-  if (c->u->onsent == NULL) {
-    return;
-  }
-
-  EACH_SINK_FRAGMENT(s,
-    c->u->onsent(c, sinkid, subid);
-  );
 }
 
 static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops) {
