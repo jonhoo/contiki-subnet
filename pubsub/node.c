@@ -13,6 +13,7 @@
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
 #define AVG(a,b) ((a+b)/2)
+#define AVG_WINDOW 10
 struct location node_location;
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
@@ -74,7 +75,7 @@ PROCESS_THREAD(node_process, ev, data)
 /*---------------------------------------------------------------------------*/
 /* proxy callbacks */
 bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
-  static short prevs[PUBSUB_MAX_SENSORS][5];
+  static short prevs[PUBSUB_MAX_SENSORS][AVG_WINDOW];
   static uint8_t num[PUBSUB_MAX_SENSORS];
   static uint8_t old[PUBSUB_MAX_SENSORS];
   switch (f->filter) {
@@ -85,8 +86,12 @@ bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
       short sum = 0;
 
       prevs[t][old[t]] = l->value;
-      old[t] = (old[t] + 1) % 5;
-      if (num[t] < 5) return false;
+      old[t] = (old[t] + 1) % AVG_WINDOW;
+      if (num[t] < AVG_WINDOW) {
+        num[t]++;
+        return false;
+      }
+
       for (i = 0; i < num[t]; i++) {
         sum += prevs[t][i];
       }
@@ -94,8 +99,6 @@ bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
       if (abs(sum/num[t] - l->value) < f->arg.deviation) {
         return true;
       }
-      if (num[t] < 5) num[t]++;
-      prevs[t][old[t]] = l->value;
       /* fall-through */
     }
     default:
