@@ -48,7 +48,6 @@ static void notify_left(struct subnet_conn *c, const rimeaddr_t *sink);
 static void handle_leaving(struct subnet_conn *c, const rimeaddr_t *sink);
 static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
 static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, const rimeaddr_t *from);
-static void clean_buffers(struct subnet_conn *c, struct sink *s);
 static bool inject_packetbuf(subid_t subid, dlen_t bytes, uint8_t *fragments, dlen_t *buflen, void *payload, void *buf);
 static void prepare_packetbuf(uint8_t type, const rimeaddr_t *sink, uint8_t hops);
 
@@ -531,18 +530,6 @@ static void handle_subscriptions(struct subnet_conn *c, const rimeaddr_t *sink, 
     }
   );
 }
-
-static void clean_buffers(struct subnet_conn *c, struct sink *s) {
-  if (c->sentpacket != NULL) {
-    queuebuf_free(c->sentpacket);
-    c->sentpacket = NULL;
-  }
-
-  if (s != NULL) {
-    s->buflen = 0;
-    s->fragments = 0;
-  }
-}
 /*---------------------------------------------------------------------------*/
 /* private callback function definitions */
 static void on_peer(struct disclose_conn *disclose, const rimeaddr_t *from) {
@@ -783,7 +770,8 @@ static void on_sent(struct disclose_conn *disclose, int status) {
 
       if (nexthop == NULL) {
         PRINTF("subnet: no next hop to try, flailing\n");
-        clean_buffers(c, s);
+        /* note: we're not resetting the sink packetbuf here, because that way
+         * the data will be sent again later */
         if (c->u->errpub != NULL) {
           c->u->errpub(c);
         }
@@ -801,7 +789,15 @@ static void on_sent(struct disclose_conn *disclose, int status) {
 
     PRINTF("subnet: packet sent successfully\n");
 
-    clean_buffers(c, s);
+    if (c->sentpacket != NULL) {
+      queuebuf_free(c->sentpacket);
+      c->sentpacket = NULL;
+    }
+
+    /* reset sink packetbuf */
+    s->buflen = 0;
+    s->fragments = 0;
+
     if (c->u->onsent == NULL) {
       return;
     }
