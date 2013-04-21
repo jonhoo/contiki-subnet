@@ -61,7 +61,7 @@ PROCESS_THREAD(node_process, ev, data)
   printf("location read: <%03d, %03d>\n", l.x, l.y);
 
   // Initialize publisher
-  publisher_start(&soft_filter_proxy, NULL, NULL, 10*CLOCK_SECOND);
+  publisher_start(&soft_filter_proxy, &hard_filter_proxy, &aggregator_proxy, 10*CLOCK_SECOND);
 
   // Dynamic properties
   publisher_has(READING_HUMIDITY, sizeof(humidity));
@@ -135,11 +135,13 @@ bool hard_filter_proxy(struct hfilter *f) {
 }
 
 void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t items, void *datas[]) {
+  int i;
+
   switch (agg->aggregator) {
     case LOCATION_AVG:
     {
       struct locshort *a,*b;
-      int i, j, changes;
+      int j, changes;
       do {
         changes = 0;
         for (i = 0; i < items; i++) {
@@ -167,8 +169,8 @@ void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t
       break;
     }
     default:
-      for (; items >= 0; items--) {
-        pubsub_add_data(sink, subid, datas[items], sizeof(struct locshort));
+      for (i = 0; i < items; i++) {
+        pubsub_add_data(sink, subid, datas[i], sizeof(struct locshort));
       }
   }
 }

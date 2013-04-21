@@ -12,7 +12,7 @@
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 #define MAX(a,b) (a>b?a:b)
-#define MIN_DEVIATION 1000
+#define MIN_DEVIATION 10
 /*---------------------------------------------------------------------------*/
 static void on_reading(subid_t subid, void *data) {
   const struct subscription *s = subscriber_subscription(subid);
