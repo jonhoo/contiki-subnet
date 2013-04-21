@@ -9,6 +9,7 @@
 #include "contiki.h"
 #include "lib/publisher.h"
 #include "lib/random.h"
+#include "dev/serial-line.h"
 #include <stdio.h>
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
@@ -41,11 +42,23 @@ void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t i
 PROCESS_THREAD(node_process, ev, data)
 {
   static struct location l;
+  static bool gotx = false;
 
   PROCESS_BEGIN();
-  l.x = random_rand() % 100;
-  l.y = random_rand() % 100;
-  printf("initialized location to <%03d, %03d>\n", l.x, l.y);
+  printf("acquiring position...\n");
+  while (1) {
+    // Wait for the next event.
+    PROCESS_YIELD_UNTIL(ev == serial_line_event_message);
+
+    if (!gotx) {
+      l.x = atoi((char*)data);
+      gotx = true;
+    } else {
+      l.y = atoi((char*)data);
+      break;
+    }
+  }
+  printf("location read: <%03d, %03d>\n", l.x, l.y);
 
   // Initialize publisher
   publisher_start(&soft_filter_proxy, NULL, NULL, 10*CLOCK_SECOND);
