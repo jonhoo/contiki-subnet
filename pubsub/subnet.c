@@ -162,8 +162,8 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
   packetbuf_set_attr(PACKETBUF_ATTR_EFRAGMENTS, s->fragments);
   memcpy(packetbuf_dataptr(), s->buf, s->buflen);
   packetbuf_set_datalen(s->buflen);
-  PRINTF("subnet: packetbuf thinks we're sending %d bytes\n", packetbuf_datalen());
 
+#if DEBUG
   PRINTF("subnet: publishing %d bytes to %d.%d via %d.%d\n",
       s->buflen,
       s->sink.u8[0], s->sink.u8[1],
@@ -173,6 +173,7 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
   EACH_PACKET_FRAGMENT(
     PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
   );
+#endif
 
   disclose_send(&c->pubsub, nexthop);
 
