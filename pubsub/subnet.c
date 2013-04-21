@@ -483,8 +483,10 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
   }
 
   /* if from was not stored as a next hop for sink and it is indeed a *next*
-   * hop, add it (or replace with oldest) */
-  if (n != NULL && cost <= route->advertised_cost) {
+   * hop, add it (or replace with oldest).
+   * Need strictly less-than here because we haven't added 1 to the cost of the
+   * incoming packet. */
+  if (n != NULL && cost < route->advertised_cost) {
     PRINTF("subnet: viable next hop for %d.%d found (%d <= %d)\n", sink->u8[0], sink->u8[1], cost, route->advertised_cost);
     if (route->numhops < SUBNET_MAX_ALTERNATE_ROUTES) {
       replace = &route->nexthops[route->numhops];
