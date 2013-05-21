@@ -1,9 +1,11 @@
 #!/bin/bash
+BN=`basename $1`
+echo "$BN"
 (
-  for f in `ls ../logs/scale/$1/ | grep -P '\d+'`
+  for f in `ls ../logs/$1/ | grep -P '\d+'`
     do
       echo -n "$f "
-      RD=`./analyze "scale/$1/$f/" \
+      RD=`./analyze "../logs/$1/$f/" \
         | grep ratio \
         | sed 's/^.*: //'`
       RAT=`echo "$RD" | sed 's/%.*//'`
@@ -14,4 +16,4 @@
 ) \
 | sort -n \
 | column -t \
-| tee $1.ratios.dat
+| tee $BN.ratios.dat

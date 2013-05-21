@@ -1,7 +1,7 @@
 set xlabel "seconds"
 set ylabel "ratio"
 set grid
-set xrange [-100:1300]
+set xrange [-60:1260]
 set yrange [-0.1:1.1]
 set offset graph 0.02, 0.02
 set key right bottom
