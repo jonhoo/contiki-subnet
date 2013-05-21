@@ -8,22 +8,33 @@ fi
 
 sed -r -n -e '/got:/p' "raw.log" > "recv.log"
 sed -i 's/got: //' "recv.log"
-sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "recv.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]*\s*//' "recv.log"
 
 sed -r -n -e '/contikimac: send \(/p' "raw.log" > "packets.log"
 sed -i 's/contikimac: //' "packets.log"
-sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "packets.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]*\s*//' "packets.log"
 sed -r -i 's/send \(strobes=[0-9]*, len=([0-9]*), .*/\1/' "packets.log"
 
 sed -r -n -e '/sense:/p' "raw.log" > "sense.log"
 sed -i 's/sense: //' "sense.log"
-sed -r -i 's/^[0-9]*\s*ID:[0-9]\s*//' "sense.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]*\s*//' "sense.log"
+
+sed -r -n -e '/publish:/p' "raw.log" > "publish.log"
+sed -i 's/publish: //' "publish.log"
+sed -r -i 's/^[0-9]*\s*ID:[0-9]*\s*//' "publish.log"
 
 echo -n "Number of packets: "
 cat "packets.log" | wc -l
 
 echo -n "Total bytes sent: "
 cat "packets.log" | paste -sd+ - | bc
+
+echo -n "Reading ratio: "
+AGGD=`cat raw.log | grep "node: aggregated" | wc -l`
+GOT=`wc -l "recv.log" | sed 's/ .*//'`
+PUBLISHED=`wc -l "publish.log" | sed 's/ .*//'`
+echo -e "scale=1\nprint 100*$GOT/($PUBLISHED-$AGGD)" | bc
+echo "% ($PUBLISHED published, $GOT received, $AGGD aggregated)"
 
 echo "Packet stats:"
 R -q -e "x <- read.csv('packets.log', header = F); summary(x); sd(x[ , 1])" |
