@@ -133,6 +133,11 @@ void publisher_publish(enum reading_type t, void *reading) {
 static void on_subscription(struct esubscription *s) {
   struct ctimer *c = &collect[s->in.sensor];
   PRINTF("publisher: got new subscription for sensor: %d\n", s->in.sensor);
+  if (hard_filter != NULL && hard_filter(&s->in.hard)) {
+    PRINTF("publisher: subscription ignored - hard filtered\n");
+    return;
+  }
+
   if (s->in.interval < c->etimer.timer.interval) {
     PRINTF("publisher: new interval %lu is lower than current %lu, setting ctimer\n", s->in.interval, c->etimer.timer.interval);
     ctimer_set(c, s->in.interval, &on_collect_timer_expired, &s->in.sensor);
@@ -230,7 +235,7 @@ static void on_aggregate_timer_expired(void *sinkp) {
     sub = find_subscription(sink, subid);
 
     if (is_active(sub)) {
-      PRINTF("publisher: subscription %d is active", subid);
+      PRINTF("publisher: subscription %d:%d is active", sink, subid);
       if (hard_filter != NULL && hard_filter(&sub->in.hard)) {
         PRINTF(", but hard filtered\n");
         continue;
