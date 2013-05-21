@@ -3,6 +3,7 @@ CONTIKI = ..
 CONTIKI_PROJECT = node sink van plain
 
 CFLAGS += -DPROJECT_CONF_H=\"project-conf.h\"
+TARGET_LIBFILES += -lm
 
 all: $(CONTIKI_PROJECT)
 

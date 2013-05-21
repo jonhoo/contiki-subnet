@@ -10,6 +10,7 @@
 #include "lib/publisher.h"
 #include "lib/random.h"
 #include "dev/serial-line.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
@@ -125,8 +126,8 @@ bool hard_filter_proxy(struct hfilter *f) {
       v = &f->arg.loc;
       n = &node_location;
 
-      if (abs(n->x - v->x) > 10) return true;
-      if (abs(n->y - v->y) > 10) return true;
+      double dist = sqrt(pow(abs(n->x - v->x), 2) + pow(abs(n->y - v->y), 2));
+      if (dist > 10) return true;
       /* fall-through */
     default:
       return false;
