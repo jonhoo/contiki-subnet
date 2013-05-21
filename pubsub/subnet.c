@@ -177,8 +177,16 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
 
   disclose_send(&c->pubsub, nexthop);
 
+  PRINTF("subnet: publish sent to NIC\n");
+
   /* store publish packet */
   c->sentpacket = queuebuf_new_from_packetbuf();
+
+  PRINTF("subnet: publish buffered - resetting...\n");
+
+  /* reset sink packetbuf */
+  s->buflen = 0;
+  s->fragments = 0;
 }
 
 subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes) {
@@ -807,21 +815,15 @@ static void on_sent(struct disclose_conn *disclose, int status) {
       return;
     }
 
-    PRINTF("subnet: packet sent successfully\n");
+    PRINTF("subnet: packet sent\n");
 
     if (c->sentpacket != NULL) {
       queuebuf_free(c->sentpacket);
       c->sentpacket = NULL;
     }
-
-    /* reset sink packetbuf */
-    s->buflen = 0;
-    s->fragments = 0;
-
-
   } else {
     if (status == MAC_TX_OK) {
-      PRINTF("subnet: broadcast packet sent successfully\n");
+      PRINTF("subnet: broadcast packet sent\n");
     } else {
       PRINTF("subnet: broadcast packet failed to send, but doesn't matter\n");
     }
