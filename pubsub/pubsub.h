@@ -169,8 +169,8 @@ void pubsub_writein();
  * \brief Find all published values for the given subscription
  * \param sink The sink of the subscription to find values for
  * \param subid The subscription to find values for
- * \param payloads Array into which to load pointers to values. Needs to be able
- *          to hold PUBSUB_MAX_SUBSCRIPTIONS values.
+ * \param payloads Array into which to load pointers to values
+ * \param plen Number of elements payloads[] can hold
  * \return The number of values extracted
  *
  * This function will fill the passed array with pointers directly to each
@@ -179,7 +179,7 @@ void pubsub_writein();
  * If you use this data to write data to the packetbuf, you might want to look
  * at wrapping it in pubsub_writeout() and pubsub_writein().
  */
-uint8_t extract_data(short sink, subid_t subid, void *payloads[]);
+uint8_t extract_data(short sink, subid_t subid, void *payloads[], int plen);
 
 /**
  * \brief Find the highest known subscription id for the given sink

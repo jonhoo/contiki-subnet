@@ -20,6 +20,8 @@
 #define PUBSUB_MAX_SENSORS 5
 #endif
 
+#define MAX_FRAGS_PER_PACKET (PACKETBUF_SIZE/sizeof(struct fragment))
+
 /**
  * \brief Starts the pubsub network connection
  * \param soft_filter_proxy Function to use as a soft filter proxy. Should

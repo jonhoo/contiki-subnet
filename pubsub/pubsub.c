@@ -135,7 +135,7 @@ short pubsub_myid() {
 void pubsub_close() {
   subnet_close(&state.c);
 }
-uint8_t extract_data(short sink, subid_t sid, void *payloads[]) {
+uint8_t extract_data(short sink, subid_t sid, void *payloads[], int plen) {
   /* TODO: this is not clean separation of concerns - it's a dirty dirty hack */
   const struct sink *s = subnet_sink(&state.c, sink);
   uint8_t num = 0;
@@ -143,9 +143,13 @@ uint8_t extract_data(short sink, subid_t sid, void *payloads[]) {
   EACH_SINK_FRAGMENT(s,
     PRINTF("pubsub: hit value for %d with size %d\n", subid, frag->length);
     if (subid == sid && frag->length != 0) {
-      PRINTF("pubsub: extracted.\n");
-      payloads[num] = payload;
-      num++;
+      if (num >= plen) {
+        PRINTF("pubsub: cannot extract - would overflow array\n");
+      } else {
+        PRINTF("pubsub: extracted.\n");
+        payloads[num] = payload;
+        num++;
+      }
     }
   );
 

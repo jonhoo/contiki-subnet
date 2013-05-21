@@ -222,7 +222,7 @@ static void on_collect_timer_expired(void *tp) {
   }
 }
 static void on_aggregate_timer_expired(void *sinkp) {
-  static void *payloads[PUBSUB_MAX_SUBSCRIPTIONS];
+  static void *payloads[MAX_FRAGS_PER_PACKET];
   struct esubscription *sub = NULL;
   short sink = *((short *)sinkp);
   subid_t maxsub = last_subscription(sink);
@@ -242,7 +242,7 @@ static void on_aggregate_timer_expired(void *sinkp) {
       }
       PRINTF("\n");
 
-      num = extract_data(sink, subid, payloads);
+      num = extract_data(sink, subid, payloads, MAX_FRAGS_PER_PACKET);
       if (num == 0) {
         PRINTF("publisher: no data for subscription %d, adding\n", subid);
         pubsub_add_data(sink, subid, NULL, 0);
