@@ -90,30 +90,40 @@ bool soft_filter_proxy(struct sfilter *f, enum reading_type t, void *data) {
   static short prevs[PUBSUB_MAX_SENSORS][AVG_WINDOW];
   static uint8_t num[PUBSUB_MAX_SENSORS];
   static uint8_t old[PUBSUB_MAX_SENSORS];
+  struct locshort *l = (struct locshort *) data;
   switch (f->filter) {
     case DEVIATION:
     {
       uint8_t i;
-      struct locshort *l = (struct locshort *) data;
       short sum = 0;
 
       prevs[t][old[t]] = l->value;
       old[t] = (old[t] + 1) % AVG_WINDOW;
+
       if (num[t] < AVG_WINDOW) {
         num[t]++;
-        return false;
-      }
+      } else {
 
-      for (i = 0; i < num[t]; i++) {
-        sum += prevs[t][i];
-      }
+        for (i = 0; i < num[t]; i++) {
+          sum += prevs[t][i];
+        }
 
-      if (abs(sum/num[t] - l->value) < f->arg.deviation) {
-        return true;
+        if (abs(sum/num[t] - l->value) < f->arg.deviation) {
+          return true;
+        }
       }
       /* fall-through */
     }
     default:
+      switch (t) {
+        case READING_HUMIDITY:
+          printf("publish: humidity @ <%03d, %03d> = %d\n", l->location.x, l->location.y, l->value);
+          break;
+        case READING_PRESSURE:
+          printf("publish: pressure @ <%03d, %03d> = %d\n", l->location.x, l->location.y, l->value);
+          break;
+
+      }
       return false;
   }
 }
