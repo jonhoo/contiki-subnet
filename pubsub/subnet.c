@@ -310,31 +310,29 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
     }
   }
 
-  PRINTF("subnet: determining best next hop:");
+  PRINTF("subnet: determining best next hop amongst:\n");
 
   /* find next most expensive route after n */
   next = n;
   for (i = 0; i < route->numhops; i++) {
     this = &route->nexthops[i];
 
-    PRINTF("\n        %d.%d is: ", this->node->addr.u8[0], this->node->addr.u8[1]);
-
-    /* previous hop can't be next hop */
-    if (this == n) continue;
-    PRINTF("not-n ");
+    PRINTF("        %d.%d (cost: %d, last_active: %d)\n"
+        , this->node->addr.u8[0]
+        , this->node->addr.u8[1]
+        , this->cost
+        , this->node->last_active);
 
     if (n != NULL) {
-      PRINTF("limited ");
+      /* previous hop can't be next hop */
+      if (this == n) continue;
 
-      /* next hop can't be fresher than previous hop (because then we'd already
+      /* next hop can't be cheaper than previous hop (because then we'd already
        * have tried it) */
-      if (this->node->last_active > n->node->last_active) continue;
-      PRINTF("older-n ");
+      if (this->cost < n->cost) continue;
 
-      /* nor can it be equally recent and before */
-      if (this->node->last_active == n->node->last_active && i < previ) continue;
-
-      PRINTF("after-n ");
+      /* nor can it be equally costly and before */
+      if (this->cost == n->cost && i < previ) continue;
     }
 
     /* any node that get's here is valid, so pick the best */
@@ -345,24 +343,29 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
       continue;
     }
 
-    PRINTF("competing ");
+    /* if this is closer, use it */
+    if (this->cost < next->cost) {
+      next = this;
+      nexti = i;
+      continue;
+    /* if it is further away, don't use it */
+    } else if (this->cost > next->cost) continue;
 
-    /* if this is older, don't use it */
-    if (this->node->last_active < next->node->last_active) continue;
+    /* if this is newer, use it */
+    if (this->node->last_active < next->node->last_active) {
+      next = this;
+      nexti = i;
+      continue;
+    /* if it is older, don't use it */
+    } else if (this->node->last_active < next->node->last_active) continue;
 
-    PRINTF("fresher ");
-
-    /* if this is equally fresh and later, don't use it */
-    if (this->node->last_active == next->node->last_active && i > nexti) continue;
-
-    PRINTF("and not same-but-later!");
-
-    /* here, it's either cheaper or earlier, so it's the best */
-    next = this;
-    nexti = i;
+    /* if we're closer to the front of the list, use it */
+    if (i < nexti) {
+      next = this;
+      nexti = i;
+      continue;
+    }
   }
-
-  PRINTF("\n");
 
   if (next == n || next == NULL) {
     /* no next route found */
@@ -512,7 +515,13 @@ static void update_routes(struct subnet_conn *c, const rimeaddr_t *sink, const r
    * Need strictly less-than here because we haven't added 1 to the cost of the
    * incoming packet. */
   if (n != NULL && cost < route->advertised_cost) {
-    PRINTF("subnet: viable next hop for %d.%d found (%d <= %d)\n", sink->u8[0], sink->u8[1], cost, route->advertised_cost);
+    PRINTF("subnet: viable next hop for %d.%d found: %d.%d (%d <= %d)\n"
+        , sink->u8[0]
+        , sink->u8[1]
+        , from->u8[0]
+        , from->u8[1]
+        , cost
+        , route->advertised_cost);
     if (route->numhops < SUBNET_MAX_ALTERNATE_ROUTES) {
       replace = &route->nexthops[route->numhops];
       route->numhops++;
