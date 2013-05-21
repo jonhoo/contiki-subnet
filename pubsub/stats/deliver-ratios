@@ -1,9 +1,9 @@
 #!/bin/bash
 (
-  for f in `ls logs/scale/$1/ | grep -P '\d+'`
+  for f in `ls ../logs/scale/$1/ | grep -P '\d+'`
     do
       echo -n "$f "
-      RD=`./analyze "logs/scale/$1/$f/" \
+      RD=`./analyze "scale/$1/$f/" \
         | grep ratio \
         | sed 's/^.*: //'`
       RAT=`echo "$RD" | sed 's/%.*//'`

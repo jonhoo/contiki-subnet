@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 CWD=`pwd`
-cd "$1"
+cd "../logs/$1"
 
 if [ -e "recv.log" ]; then
   rm "recv.log" "packets.log" "sense.log"
