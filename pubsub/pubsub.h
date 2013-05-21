@@ -67,9 +67,6 @@ struct pubsub_callbacks {
   /* Function to call when a publish is received */
   void (* on_ondata)(short sink, subid_t subid, void *data);
 
-  /* Function to call when a publish was sent successfully */
-  void (* on_onsent)(short sink, subid_t subid);
-
   /* Function to call when a new subscription was found */
   void (* on_subscription)(struct esubscription *s);
 

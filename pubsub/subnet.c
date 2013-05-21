@@ -818,13 +818,6 @@ static void on_sent(struct disclose_conn *disclose, int status) {
     s->buflen = 0;
     s->fragments = 0;
 
-    if (c->u->onsent == NULL) {
-      return;
-    }
-
-    EACH_SINK_FRAGMENT(s,
-      c->u->onsent(c, sinkid, subid);
-    );
 
   } else {
     if (status == MAC_TX_OK) {

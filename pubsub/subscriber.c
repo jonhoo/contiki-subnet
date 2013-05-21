@@ -27,7 +27,6 @@ static struct pubsub_callbacks callbacks = {
   NULL,
   on_ondata,
   NULL,
-  NULL,
   NULL
 };
 static void (*on_reading)(subid_t subid, void *data);

@@ -152,9 +152,6 @@ struct subnet_callbacks {
    * to be reused later as the memory WILL be reclaimed. */
   void (* ondata)(struct subnet_conn *c, short sinkid, subid_t subid, void *data);
 
-  /* called when a publish was sent successfully */
-  void (* onsent)(struct subnet_conn *c, short sinkid, subid_t subid);
-
   /* called when a new subscription is in packetbuf. Note that data MUST be
    * copied if it is to be reused later as the memory WILL be reclaimed */
   void (* subscribe)(struct subnet_conn *c, short sinkid, subid_t subid, void *data);

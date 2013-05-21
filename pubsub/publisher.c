@@ -22,7 +22,6 @@
 /* private functions */
 static void on_errpub();
 static void on_ondata(short sink, subid_t subid, void *data);
-static void on_onsent(short sink, subid_t subid);
 static void on_subscription(struct esubscription *s);
 static void on_unsubscription(struct esubscription *old);
 static void on_collect_timer_expired(void *tp);
@@ -35,7 +34,6 @@ static struct process *etarget;
 static struct pubsub_callbacks callbacks = {
   on_errpub,
   on_ondata,
-  on_onsent,
 
   on_subscription,
   on_unsubscription
@@ -209,9 +207,6 @@ static void on_ondata(short sink, subid_t subid, void *data) {
 }
 static void on_errpub() {
   PRINTF("publisher: data publishing failed - could not forward packet\n");
-}
-static void on_onsent(short sink, subid_t subid) {
-  PRINTF("publisher: data published successfully\n");
 }
 static void set_needs(enum reading_type t, bool need) {
   bool n = needs[t];

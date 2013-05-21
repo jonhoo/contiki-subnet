@@ -26,7 +26,6 @@ static enum existance sub_state(struct esubscription *s);
 
 static void on_errpub(struct subnet_conn *c);
 static void on_ondata(struct subnet_conn *c, short sink, subid_t subid, void *data);
-static void on_onsent(struct subnet_conn *c, short sink, subid_t subid);
 static void on_subscribe(struct subnet_conn *c, short sink, subid_t subid, void *data);
 static void on_unsubscribe(struct subnet_conn *c, short sink, subid_t subid);
 static enum existance on_exists(struct subnet_conn *c, short sink, subid_t subid);
@@ -43,7 +42,6 @@ static struct pubsub_state state;
 static struct subnet_callbacks su = {
   on_errpub,
   on_ondata,
-  on_onsent,
   on_subscribe,
   on_unsubscribe,
   on_exists,
@@ -175,12 +173,6 @@ static void on_errpub(struct subnet_conn *c) {
 static void on_ondata(struct subnet_conn *c, short sink, subid_t subid, void *data) {
   if (state.u->on_ondata != NULL) {
     state.u->on_ondata(sink, subid, data);
-  }
-}
-
-static void on_onsent(struct subnet_conn *c, short sink, subid_t subid) {
-  if (state.u->on_onsent != NULL) {
-    state.u->on_onsent(sink, subid);
   }
 }
 
