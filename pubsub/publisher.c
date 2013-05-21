@@ -27,9 +27,10 @@ static void on_unsubscription(struct esubscription *old);
 static void on_collect_timer_expired(void *tp);
 static void on_aggregate_timer_expired(void *sinkp);
 static void set_needs(enum reading_type t, bool need);
-static void aggregate_trigger(short sink, bool added_data);
+static void aggregate_trigger(short sink);
 /*---------------------------------------------------------------------------*/
 /* private members */
+static bool added_data;
 static struct process *etarget;
 static struct pubsub_callbacks callbacks = {
   on_errpub,
@@ -102,7 +103,7 @@ bool publisher_needs(enum reading_type t) {
 }
 void publisher_publish(enum reading_type t, void *reading) {
   struct wsubscription s;
-  bool added_data = true;
+  added_data = true;
   set_needs(t, false);
   PRINTF("publisher: incoming reading for sensor %d\n", t);
   PRINTF("publisher: resetting collection timer with interval %lu\n", collect[t].etimer.timer.interval);
@@ -122,7 +123,7 @@ void publisher_publish(enum reading_type t, void *reading) {
         PRINTF("publisher: reading soft filtered, so not writing\n");
       }
 
-      aggregate_trigger(s.sink, added_data);
+      aggregate_trigger(s.sink);
     }
   }
 }
@@ -174,7 +175,7 @@ static void on_unsubscription(struct esubscription *old) {
   PRINTF("publisher: new sample interval is %lu\n", min);
   ctimer_set(&c, min, &on_collect_timer_expired, &s.esub->in.sensor);
 }
-static void aggregate_trigger(short sink, bool added_data) {
+static void aggregate_trigger(short sink) {
   /* if last add failed, we should send the packet straightaway */
   if (!added_data) {
     PRINTF("publisher: packet probably full - attempting to send\n");
@@ -201,7 +202,7 @@ static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("publisher: heard data from upstream - adding\n");
 
   struct esubscription *s = find_subscription(sink, subid);
-  pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
+  added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
   // don't call aggregate_trigger here as it may send a packet
   // and we can't send a packet while receiving a packet...
 }
