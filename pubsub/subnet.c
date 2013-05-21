@@ -684,14 +684,14 @@ static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
     return;
   }
 
-  PRINTF("subnet: publish packet has %d fragments\n", packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS));
+  PRINTF("subnet: incoming packet has %d fragments\n", packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS));
 
   EACH_PACKET_FRAGMENT(
     if (frag->length > 0) {
-      PRINTF("subnet: %d: %d bytes for %d\n", fragi, frag->length, subid);
+      PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
       c->u->ondata(c, sinkid, subid, payload);
     } else {
-      PRINTF("subnet: ignoring empty fragment %i\n", fragi);
+      PRINTF("        fragment %d is empty - ignoring\n", fragi);
     }
   );
 }

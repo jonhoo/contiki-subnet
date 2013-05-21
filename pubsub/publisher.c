@@ -261,7 +261,7 @@ static void on_aggregate_timer_expired(void *sinkp) {
           pubsub_add_data(sink, subid, payloads[i], rsize[sub->in.sensor]);
         }
       } else {
-        PRINTF("publisher: calling aggregator for %d values in subscription %d\n", num, subid);
+        PRINTF("publisher: calling aggregator for %d values in subscription %d:%d\n", num, sink, subid);
         aggregator(&sub->in.aggregator, sink, subid, num, payloads);
         /* aggregator will call pubsub_add_data(sink, subid, ...) */
       }
