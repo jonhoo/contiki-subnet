@@ -1,2 +1,7 @@
 *.sky
+*.eps
+*.tex
+doff*
+don*
+cscs
 hmm
