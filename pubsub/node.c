@@ -19,18 +19,18 @@ struct location node_location;
 /*---------------------------------------------------------------------------*/
 PROCESS(node_process, "Node");
 AUTOSTART_PROCESSES(&node_process);
-static humidity *get_humidity(struct location *l) {
+static humidity *get_humidity() {
   static humidity h;
-  h.location.x = l->x;
-  h.location.y = l->y;
+  h.location.x = node_location.x;
+  h.location.y = node_location.y;
   h.value = random_rand() % 25;
   printf("sense: humidity @ <%03d, %03d> = %d\n", h.location.x, h.location.y, h.value);
   return &h;
 }
-static pressure *get_pressure(struct location *l) {
+static pressure *get_pressure() {
   static pressure p;
-  p.location.x = l->x;
-  p.location.y = l->y;
+  p.location.x = node_location.x;
+  p.location.y = node_location.y;
   p.value = random_rand() % 25;
   printf("sense: pressure @ <%03d, %03d> = %d\n", p.location.x, p.location.y, p.value);
   return &p;
@@ -41,7 +41,6 @@ void aggregator_proxy(struct aggregator *a, short sink, subid_t subid, uint8_t i
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(node_process, ev, data)
 {
-  static struct location l;
   static bool gotx = false;
 
   PROCESS_BEGIN();
@@ -51,14 +50,14 @@ PROCESS_THREAD(node_process, ev, data)
     PROCESS_YIELD_UNTIL(ev == serial_line_event_message);
 
     if (!gotx) {
-      l.x = atoi((char*)data);
+      node_location.x = atoi((char*)data);
       gotx = true;
     } else {
-      l.y = atoi((char*)data);
+      node_location.y = atoi((char*)data);
       break;
     }
   }
-  printf("location read: <%03d, %03d>\n", l.x, l.y);
+  printf("location read: <%03d, %03d>\n", node_location.x, node_location.y);
 
   // Initialize publisher
   publisher_start(&soft_filter_proxy, &hard_filter_proxy, &aggregator_proxy, 10*CLOCK_SECOND);
@@ -74,12 +73,12 @@ PROCESS_THREAD(node_process, ev, data)
     // Only read sensor if needed
     // Humidity reading
     if (publisher_needs(READING_HUMIDITY)) {
-      publisher_publish(READING_HUMIDITY, get_humidity(&l));
+      publisher_publish(READING_HUMIDITY, get_humidity());
     }
 
     // Pressure reading
     if (publisher_needs(READING_PRESSURE)) {
-      publisher_publish(READING_PRESSURE, get_pressure(&l));
+      publisher_publish(READING_PRESSURE, get_pressure());
     }
   }
 
