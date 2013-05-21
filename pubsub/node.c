@@ -152,6 +152,7 @@ void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t
     {
       struct locshort *a,*b;
       int j, changes;
+      double dist;
       do {
         changes = 0;
         for (i = 0; i < items; i++) {
@@ -160,8 +161,9 @@ void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t
           for (j = i+1; j < items; j++) {
             b = (struct locshort *) datas[j];
             if (b == NULL) continue;
-            if (abs(a->location.x - b->location.x) > agg->arg.maxdist) continue;
-            if (abs(a->location.y - b->location.y) > agg->arg.maxdist) continue;
+
+            dist = sqrt(pow(abs(a->location.x - b->location.x), 2) + pow(abs(a->location.y - b->location.y), 2));
+            if (dist > agg->arg.maxdist) continue;
 
             avg = a->value;
             avg += b->value;
