@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 /*---------------------------------------------------------------------------*/
-#define AVG(a,b) ((a+b)/2)
 #define AVG_WINDOW 10
 struct location node_location;
 /*---------------------------------------------------------------------------*/
@@ -136,6 +135,7 @@ bool hard_filter_proxy(struct hfilter *f) {
 
 void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t items, void *datas[]) {
   int i;
+  int avg;
 
   switch (agg->aggregator) {
     case LOCATION_AVG:
@@ -153,9 +153,16 @@ void aggregator_proxy(struct aggregator *agg, short sink, subid_t subid, uint8_t
             if (abs(a->location.x - b->location.x) > agg->arg.maxdist) continue;
             if (abs(a->location.y - b->location.y) > agg->arg.maxdist) continue;
 
-            a->value = AVG(a->value, b->value);
-            a->location.x = AVG(a->location.x, b->location.x);
-            a->location.y = AVG(a->location.y, b->location.y);
+            avg = a->value;
+            avg += b->value;
+            a->value = avg/2;
+            avg = a->location.x;
+            avg += b->location.x;
+            a->location.x = avg/2;
+            avg = a->location.y;
+            avg += b->location.y;
+            a->location.y = avg/2;
+            printf("node: aggregated\n");
             datas[j] = NULL;
             changes++;
           }
