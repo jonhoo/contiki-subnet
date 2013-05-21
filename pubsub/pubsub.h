@@ -137,6 +137,13 @@ subid_t pubsub_subscribe(struct subscription *s);
 void pubsub_resubscribe(subid_t subid);
 
 /**
+ * \brief Get current amount of data queued for the given sink
+ * \param sink Sink to check payload size for
+ * \return Number of bytes queued, -1 on error
+ */
+short pubsub_packetlen(short sinkid);
+
+/**
  * \brief End the given subscription
  * \param subid Subscription to remove
  */

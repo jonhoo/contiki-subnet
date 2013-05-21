@@ -178,9 +178,19 @@ static void on_unsubscription(struct esubscription *old) {
 }
 static void aggregate_trigger(short sink, bool added_data) {
   /* if last add failed, we should send the packet straightaway */
-  /* TODO: send before full? */
   if (!added_data) {
     PRINTF("publisher: packet probably full - attempting to send\n");
+    ctimer_stop(&aggregate[sink]);
+    on_aggregate_timer_expired(&sink);
+  }
+
+  /* if the packet is more than half full, send to avoid dropping readings */
+  /* this should be sufficient to avoid dropping readings as because of this
+   * same rule no incoming packet should be larger than PACKETBUF_SIZE/2 and so
+   * it will always fit inside the remaining space of our buffer */
+  if (pubsub_packetlen(sink) > PACKETBUF_SIZE/2) {
+    PRINTF("publisher: pre-empting half-full packet\n");
+    ctimer_stop(&aggregate[sink]);
     on_aggregate_timer_expired(&sink);
   }
 
@@ -193,8 +203,9 @@ static void on_ondata(short sink, subid_t subid, void *data) {
   PRINTF("publisher: heard data from upstream - adding\n");
 
   struct esubscription *s = find_subscription(sink, subid);
-  bool added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
-  aggregate_trigger(sink, added_data);
+  pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
+  // don't call aggregate_trigger here as it may send a packet
+  // and we can't send a packet while receiving a packet...
 }
 static void on_errpub() {
   PRINTF("publisher: data publishing failed - could not forward packet\n");

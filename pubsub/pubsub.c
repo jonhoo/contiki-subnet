@@ -126,6 +126,9 @@ void pubsub_resubscribe(subid_t subid) {
   struct subscription *s = &find_subscription(pubsub_myid(), subid)->in;
   return subnet_resubscribe(&state.c, subid, s, sizeof(struct subscription));
 }
+short pubsub_packetlen(short sinkid) {
+  return subnet_packetlen(&state.c, sinkid);
+}
 void pubsub_unsubscribe(subid_t subid) {
   subnet_unsubscribe(&state.c, subid);
 }

@@ -60,7 +60,7 @@ PROCESS_THREAD(node_process, ev, data)
   printf("location read: <%03d, %03d>\n", node_location.x, node_location.y);
 
   // Initialize publisher
-  publisher_start(&soft_filter_proxy, &hard_filter_proxy, &aggregator_proxy, 10*CLOCK_SECOND);
+  publisher_start(&soft_filter_proxy, &hard_filter_proxy, &aggregator_proxy, 5*CLOCK_SECOND);
 
   // Dynamic properties
   publisher_has(READING_HUMIDITY, sizeof(humidity));

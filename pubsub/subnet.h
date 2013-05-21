@@ -239,6 +239,14 @@ subid_t subnet_subscribe(struct subnet_conn *c, void *payload, dlen_t bytes);
 void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dlen_t bytes);
 
 /**
+ * \brief Get current amount of data queued for the given sink
+ * \param c Connection state
+ * \param sink Sink to check payload size for
+ * \return Number of bytes queued, -1 on error
+ */
+short subnet_packetlen(struct subnet_conn *c, short sinkid);
+
+/**
  * \brief End the given subscription
  * \param c Connection state
  * \param subid Subscription to remove

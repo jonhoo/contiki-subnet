@@ -207,6 +207,23 @@ void subnet_resubscribe(struct subnet_conn *c, subid_t subid, void *payload, dle
   }
 }
 
+short subnet_packetlen(struct subnet_conn *c, short sinkid) {
+  struct sink *s;
+
+  if (sinkid >= c->numsinks) {
+    PRINTF("subnet: invalid sink id\n");
+    return -1;
+  }
+
+  if (c->writeout == sinkid) {
+    s = &c->writesink;
+  } else {
+    s = &c->sinks[sinkid];
+  }
+
+  return s->buflen;
+}
+
 void subnet_unsubscribe(struct subnet_conn *c, subid_t subid) {
   prepare_packetbuf(SUBNET_PACKET_TYPE_UNSUBSCRIBE, &rimeaddr_node_addr, 0);
   inject_packetbuf(subid, 0, NULL, NULL, NULL, NULL);
