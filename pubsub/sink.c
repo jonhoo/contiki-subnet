@@ -49,7 +49,7 @@ PROCESS_THREAD(sink_process, ev, data)
   s.soft.arg.deviation = MIN_DEVIATION;
   s.hard.filter = NO_HARD_FILTER;
   s.aggregator.aggregator = LOCATION_AVG;
-  s.aggregator.arg.maxdist = 10;
+  s.aggregator.arg.maxdist = 25;
 
   /* subscribe to humidity */
   s.interval = 15*CLOCK_SECOND;
