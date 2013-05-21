@@ -1,0 +1,17 @@
+#!/bin/bash
+(
+  for f in `ls logs/scale/$1/ | grep -P '\d+'`
+    do
+      echo -n "$f "
+      RD=`./analyze "logs/scale/$1/$f/" \
+        | grep ratio \
+        | sed 's/^.*: //'`
+      RAT=`echo "$RD" | sed 's/%.*//'`
+      REM=`echo "$RD" | sed 's/.*% (\([0-9]*\) published, \([0-9]*\) received, \([0-9]*\) aggregated)/\1-\3-\2/' | bc`
+      echo -e "scale = 5\nprint $RAT/100" | bc
+      echo " $REM"
+    done
+) \
+| sort -n \
+| column -t \
+| tee $1.ratios.dat
