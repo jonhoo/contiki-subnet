@@ -1,1 +1,1 @@
-../../../pubsub/disclose.c
+../../../subnet/disclose.c
