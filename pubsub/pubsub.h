@@ -20,7 +20,7 @@
 #include "net/rime/subnet.h"
 #include "net/rime/rimeaddr.h"
 #include <stdbool.h>
-#include "pubsub-config.h"
+#include "subnet-config.h"
 /*---------------------------------------------------------------------------*/
 #ifdef PUBSUB_CONF_MAX_SUBSCRIPTIONS
 #define PUBSUB_MAX_SUBSCRIPTIONS PUBSUB_CONF_MAX_SUBSCRIPTIONS

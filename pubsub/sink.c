@@ -7,7 +7,7 @@
 
 #include "contiki.h"
 #include "lib/subscriber.h"
-#include "pubsub-config.h"
+#include "subnet-config.h"
 #include <stdio.h>
 #include <string.h>
 /*---------------------------------------------------------------------------*/
