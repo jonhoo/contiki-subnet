@@ -1,5 +1,8 @@
 all: overhead ratios loss-ratios
 
+clean:
+	rm *.eps *.tex *.dat
+
 loss-ratios: loss-ratios.eps
 	cp $@.eps $@.tex ~/uni/net/cw2/graphs/
 
@@ -7,11 +10,15 @@ ratios: dense-ratios.eps sparse-ratios.eps
 	cp dense-ratios.eps dense-ratios.tex ~/uni/net/cw2/graphs/
 	cp sparse-ratios.eps sparse-ratios.tex ~/uni/net/cw2/graphs/
 
-overhead: overhead.eps
-	cp $@.eps $@.tex ~/uni/net/cw2/graphs/
+overhead: overhead-packets.eps overhead-bytes.eps
+	cp overhead-{bytes,packets}.{eps,tex} ~/uni/net/cw2/graphs/
 
-overhead.eps: overhead.plot stats.dat
-	gnuplot overhead.plot
+overhead-%.eps: overhead-%.plot stats.dat
+	gnuplot overhead-$*.plot
+
+stats.dat: dense-32.dat dense-16.dat dense-8.dat dense-4.dat dense-2.dat dense-1.dat \
+           sparse-32.dat sparse-16.dat sparse-8.dat sparse-4.dat sparse-2.dat sparse-1.dat
+	./extract-packets-bytes > $@
 
 dense-ratios.eps: dense-32.ratios.dat dense-16.ratios.dat dense-8.ratios.dat \
                   deliver-ratios.dense.plot
@@ -26,7 +33,10 @@ loss-ratios.eps: 0-loss.ratios.dat 1-loss.ratios.dat 2-loss.ratios.dat 5-loss.ra
 	gnuplot deliver-ratios.loss.plot
 
 %-loss.ratios.dat: ../logs/loss/%-loss/raw.log
-	./deliver-ratios loss/$*-loss
+	./deliver-ratios.pl $< > $@
 
 %.ratios.dat: ../logs/scale/%/raw.log
-	./deliver-ratios scale/$*
+	./deliver-ratios.pl $< > $@
+
+%.dat: ../logs/scale/%/raw.log
+	./analyze $(dir $<) > $@

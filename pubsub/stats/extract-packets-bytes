@@ -1,0 +1,9 @@
+#!/bin/bash
+echo "# nodes s-packets s-bytes d-packets d-bytes"
+for f in 1 2 4 8 16 32; do
+  DBYTES=`cat dense-$f.dat | grep bytes | sed 's/.*: /scale=8\n0.001*/' | bc`
+  DPKTS=`cat dense-$f.dat | grep packets | sed 's/.*: //'`
+  SBYTES=`cat sparse-$f.dat | grep bytes | sed 's/.*: /scale=8\n0.001*/' | bc`
+  SPKTS=`cat sparse-$f.dat | grep packets | sed 's/.*: //'`
+  echo "$f $SPKTS $SBYTES $DPKTS $DBYTES"
+done
