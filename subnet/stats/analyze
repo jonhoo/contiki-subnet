@@ -2,10 +2,6 @@
 CWD=`pwd`
 cd "$1"
 
-if [ -e "recv.log" ]; then
-  rm "recv.log" "packets.log" "sense.log"
-fi
-
 sed -r -n -e '/got:/p' "raw.log" > "recv.log"
 sed -i 's/got: //' "recv.log"
 sed -r -i 's/^[0-9]*\s*ID:[0-9]*\s*//' "recv.log"
@@ -36,7 +32,12 @@ PUBLISHED=`wc -l "publish.log" | sed 's/ .*//'`
 echo -e "scale=1\nprint 100*$GOT/($PUBLISHED-$AGGD)" | bc
 echo "% ($PUBLISHED published, $GOT received, $AGGD aggregated)"
 
-echo "Packet stats:"
-R -q -e "x <- read.csv('packets.log', header = F); summary(x); sd(x[ , 1])" |
-grep -v ">" | grep -v "V1" | sed -e 's/\[1\] / Stddev.:/'
+if [[ -e "/usr/bin/R" ]] ; then
+  echo "Packet stats:"
+  R -q -e "x <- read.csv('packets.log', header = F); summary(x); sd(x[ , 1])" |
+  grep -v ">" | grep -v "V1" | sed -e 's/\[1\] / Stddev.:/'
+fi
+
+rm "recv.log" "packets.log" "sense.log" "publish.log"
+
 cd "$CWD"
