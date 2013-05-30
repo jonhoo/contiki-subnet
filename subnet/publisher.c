@@ -203,9 +203,7 @@ static void on_ondata(short sink, subid_t subid, void *data) {
 
   struct esubscription *s = find_subscription(sink, subid);
   added_data = pubsub_add_data(sink, subid, data, rsize[s->in.sensor]);
-  // don't call aggregate_trigger here as it may send a packet
-  // and we can't send a packet while receiving a packet...
-  // TODO: Trigger a check for a semi-full packet here
+  aggregate_trigger(sink);
 }
 static void on_errpub() {
   PRINTF("publisher: data publishing failed - could not forward packet\n");

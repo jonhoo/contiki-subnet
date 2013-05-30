@@ -669,6 +669,7 @@ static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
   const rimeaddr_t *sink = packetbuf_addr(PACKETBUF_ADDR_ERECEIVER);
   short sinkid;
   struct sink *s;
+  char buf[PACKETBUF_SIZE];
 
   PRINTF("subnet: got publish packet from downstream node %d.%d\n", from->u8[0], from->u8[1]);
   if (c->u->ondata == NULL) {
@@ -686,7 +687,11 @@ static void on_recv(struct disclose_conn *disclose, const rimeaddr_t *from) {
 
   PRINTF("subnet: incoming packet has %d fragments\n", packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS));
 
-  EACH_PACKET_FRAGMENT(
+  // use a buffer to allow ondata to use the packetbuf (e.g. decide to send)
+  memcpy(buf, packetbuf_dataptr(), packetbuf_datalen());
+  EACH_FRAGMENT(
+    packetbuf_attr(PACKETBUF_ATTR_EFRAGMENTS),
+    buf,
     if (frag->length > 0) {
       PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
       c->u->ondata(c, sinkid, subid, payload);
