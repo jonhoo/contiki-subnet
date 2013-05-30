@@ -1,6 +1,6 @@
 set grid
 set xrange [-60:1260]
-set yrange [-0.1:1.1]
+set yrange [0.85:1.01]
 set key right bottom
 
 set terminal epslatex
