@@ -4,14 +4,8 @@ clean:
 	rm *.eps *.tex *.dat
 
 loss-ratios: loss-ratios.eps
-	cp $@.eps $@.tex ~/uni/net/cw2/graphs/
-
 ratios: dense-ratios.eps sparse-ratios.eps
-	cp dense-ratios.eps dense-ratios.tex ~/uni/net/cw2/graphs/
-	cp sparse-ratios.eps sparse-ratios.tex ~/uni/net/cw2/graphs/
-
 overhead: overhead-packets.eps overhead-bytes.eps
-	cp overhead-{bytes,packets}.{eps,tex} ~/uni/net/cw2/graphs/
 
 overhead-%.eps: overhead-%.plot stats.dat
 	gnuplot overhead-$*.plot
