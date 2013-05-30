@@ -175,14 +175,13 @@ void subnet_publish(struct subnet_conn *c, short sinkid) {
   );
 #endif
 
-  disclose_send(&c->pubsub, nexthop);
-
-  PRINTF("subnet: publish sent to NIC\n");
-
   /* store publish packet */
   c->sentpacket = queuebuf_new_from_packetbuf();
+  PRINTF("subnet: publish buffered\n");
 
-  PRINTF("subnet: publish buffered - resetting...\n");
+  disclose_send(&c->pubsub, nexthop);
+
+  PRINTF("subnet: publish sent to NIC, resetting\n");
 
   /* reset sink packetbuf */
   s->buflen = 0;
@@ -811,9 +810,31 @@ static void on_sent(struct disclose_conn *disclose, int status) {
           prevto->u8[0], prevto->u8[1]);
 
       if (nexthop == NULL) {
-        PRINTF("subnet: no next hop to try, flailing\n");
-        /* note: we're not resetting the sink packetbuf here, because that way
-         * the data will be sent again later */
+        PRINTF("subnet: no next hop to try, adding %d fragments back\n", queuebuf_attr(c->sentpacket, PACKETBUF_ATTR_EFRAGMENTS));
+
+        {
+          char buf[PACKETBUF_SIZE];
+          // use a buffer to allow ondata to use the packetbuf (e.g. decide to send)
+          memcpy(buf, queuebuf_dataptr(c->sentpacket), queuebuf_datalen(c->sentpacket));
+          PRINTF("subnet: sent packet was %d bytes\n", queuebuf_datalen(c->sentpacket));
+
+          EACH_FRAGMENT(
+            queuebuf_attr(c->sentpacket, PACKETBUF_ATTR_EFRAGMENTS),
+            buf,
+            if (frag->length > 0) {
+              PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
+              c->u->ondata(c, sinkid, subid, payload);
+            } else {
+              PRINTF("        fragment %d is empty - ignoring\n", fragi);
+            }
+          );
+        }
+
+        if (c->sentpacket != NULL) {
+          queuebuf_free(c->sentpacket);
+          c->sentpacket = NULL;
+        }
+
         if (c->u->errpub != NULL) {
           c->u->errpub(c);
         }
