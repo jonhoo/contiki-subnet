@@ -320,7 +320,7 @@ static const rimeaddr_t* get_next_hop(struct subnet_conn *c, struct sink *route,
         , this->node->addr.u8[0]
         , this->node->addr.u8[1]
         , this->cost
-        , this->node->last_active);
+        , (int) this->node->last_active);
 
     if (n != NULL) {
       /* previous hop can't be next hop */
