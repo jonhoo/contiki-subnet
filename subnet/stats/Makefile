@@ -26,10 +26,10 @@ loss-ratios.eps: 0-loss.ratios.dat 1-loss.ratios.dat 2-loss.ratios.dat 5-loss.ra
                  deliver-ratios.loss.plot
 	gnuplot deliver-ratios.loss.plot
 
-%-loss.ratios.dat: ../logs/loss/%-loss/raw.log
-	./deliver-ratios.pl $< > $@
+%-loss.ratios.dat: ../logs/loss/%-loss/raw.log deliver-ratios.pl
+	./deliver-ratios.pl $< 30 > $@
 
-%.ratios.dat: ../logs/scale/%/raw.log
+%.ratios.dat: ../logs/scale/%/raw.log deliver-ratios.pl
 	./deliver-ratios.pl $< > $@
 
 %.dat: ../logs/scale/%/raw.log

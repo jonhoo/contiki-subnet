@@ -810,10 +810,11 @@ static void on_sent(struct disclose_conn *disclose, int status) {
           prevto->u8[0], prevto->u8[1]);
 
       if (nexthop == NULL) {
-        PRINTF("subnet: no next hop to try, adding %d fragments back\n", queuebuf_attr(c->sentpacket, PACKETBUF_ATTR_EFRAGMENTS));
+        PRINTF("subnet: no next hop to try, adding fragments back\n");
 
         {
           char buf[PACKETBUF_SIZE];
+          uint8_t back = 0;
           // use a buffer to allow ondata to use the packetbuf (e.g. decide to send)
           memcpy(buf, queuebuf_dataptr(c->sentpacket), queuebuf_datalen(c->sentpacket));
           PRINTF("subnet: sent packet was %d bytes\n", queuebuf_datalen(c->sentpacket));
@@ -824,10 +825,19 @@ static void on_sent(struct disclose_conn *disclose, int status) {
             if (frag->length > 0) {
               PRINTF("        fragment %d is %d bytes for %d...\n", fragi, frag->length, subid);
               c->u->ondata(c, sinkid, subid, payload);
+              back++;
             } else {
               PRINTF("        fragment %d is empty - ignoring\n", fragi);
             }
           );
+
+#if DEBUG
+          if (back == 1) {
+            PRINTF("subnet: resurrected %u non-empty fragment\n", back);
+          } else if (back > 1) {
+            PRINTF("subnet: resurrected %u non-empty fragments\n", back);
+          }
+#endif
         }
 
         if (c->sentpacket != NULL) {
