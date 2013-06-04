@@ -1,3 +1,12 @@
+This fork of Contiki implements a library and networking components to provide a
+publish-subscribe layer for applications.
+
+See the example applications in subnet/sink.c and subnet/node.c for reference
+implementations.
+
+A full description, analysis and evaluation of the middleware can be found at:
+http://jon.tsp.io/share/contiki-subnet.pdf
+
 The Contiki Operating System
 
 Contiki is an open source operating system that runs on tiny low-power
